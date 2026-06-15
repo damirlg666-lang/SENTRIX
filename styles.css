@@ -1,0 +1,159 @@
+:root {
+  color-scheme: dark;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: #020202;
+  color: #f6f6f6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.12), transparent 28rem),
+    #020202;
+  background-size: 34px 34px, 34px 34px, auto, auto;
+}
+
+.page {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 56px 0;
+}
+
+.hero {
+  min-height: 460px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 10px;
+  padding: 56px;
+  background: rgba(0, 0, 0, 0.68);
+  box-shadow: 0 0 42px rgba(255, 255, 255, 0.06);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 3px;
+}
+
+.shield {
+  width: 22px;
+  height: 26px;
+  border: 2px solid #fff;
+  clip-path: polygon(50% 0, 100% 18%, 86% 76%, 50% 100%, 14% 76%, 0 18%);
+}
+
+.badge {
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+h1 {
+  margin: 44px 0 12px;
+  font-size: clamp(44px, 8vw, 92px);
+  line-height: 0.95;
+  letter-spacing: 0;
+}
+
+.subtitle {
+  max-width: 660px;
+  color: #b7b7b7;
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 34px;
+  flex-wrap: wrap;
+}
+
+.download {
+  color: #020202;
+  background: #fff;
+  border-radius: 6px;
+  padding: 14px 22px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.download:hover {
+  filter: brightness(0.9);
+}
+
+.note,
+.warning {
+  color: #9a9a9a;
+}
+
+.panel,
+.grid article {
+  margin-top: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.72);
+  padding: 24px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+h2,
+h3 {
+  margin: 0 0 12px;
+}
+
+li,
+p {
+  color: #bcbcbc;
+  line-height: 1.6;
+}
+
+.checklist {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.checklist li {
+  margin: 8px 0;
+}
+
+code {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 12px;
+  background: #050505;
+}
+
+@media (max-width: 800px) {
+  .hero {
+    padding: 34px 24px;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
