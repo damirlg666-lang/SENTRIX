@@ -138,7 +138,7 @@ function closestOnSegment(a, b, p, out) {
 }
 
 /** Contact handler for bladed props: fast blades cut, a tip driven in point-first sticks. */
-function sharpImpact(prop, dv, other, owner) {
+export function sharpImpact(prop, dv, other, owner) {
   if (!other || other.kind !== 'person' || prop.embedded || owner?.part == null || prop.age < 0.15) return;
   if (prop.age - (prop.lastCut ?? -1) < 0.2) return;
   const s = prop.def.sharp;
@@ -166,7 +166,8 @@ function sharpImpact(prop, dv, other, owner) {
   const axis = tip.clone().sub(a).normalize();
   if (s.stab && cp.distanceTo(tip) < 0.05 && rel.dot(axis) > 0.65 * speed && speed > s.stabSpeed) {
     prop.lastCut = prop.age;
-    bladeHit(prop.game, other, part, tip, axis, { kind: 'stab', damage: s.damage * THREE.MathUtils.clamp(speed / 6, 0.6, 2) });
+    if (s.needle) prop.game.audio?.click(2400);
+    else bladeHit(prop.game, other, part, tip, axis, { kind: 'stab', damage: s.damage * THREE.MathUtils.clamp(speed / 6, 0.6, 2) });
     if (other.removed || !other.attached[part]) return;
     // drive the point in and leave it stuck there
     body.setTranslation({ x: t.x + axis.x * 0.035, y: t.y + axis.y * 0.035, z: t.z + axis.z * 0.035 }, true);

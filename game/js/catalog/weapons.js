@@ -134,8 +134,8 @@ export const WEAPONS = [
   { id: 'grenade', name: 'Grenade', model: grenadeModel, rate: 0.6, auto: false, projectile: 'grenade', recoil: 0.0, sound: null, pos: [0.18, -0.12, -0.42] },
   // melee weapons strike whatever is under the cursor
   { id: 'knife', name: 'Knife', model: knifeModel, melee: 'stab', damage: 24, rate: 0.3, impulse: 6, sever: 0.08, recoil: 0, pos: [0.2, -0.17, -0.42] },
-  { id: 'sword', name: 'Sword', model: swordModel, melee: 'slash', damage: 32, rate: 0.42, impulse: 14, sever: 0.8, recoil: 0, pos: [0.24, -0.27, -0.55] },
-  { id: 'axe', name: 'Axe', model: axeModel, melee: 'chop', damage: 46, rate: 0.62, impulse: 22, sever: 0.9, breakChance: 0.5, recoil: 0, pos: [0.22, -0.3, -0.52] },
+  { id: 'sword', name: 'Sword', model: swordModel, melee: 'slash', damage: 32, rate: 0.42, impulse: 14, sever: 0.8, recoil: 0, pos: [0.3, -0.36, -0.62] },
+  { id: 'axe', name: 'Axe', model: axeModel, melee: 'chop', damage: 46, rate: 0.62, impulse: 22, sever: 0.9, breakChance: 0.5, recoil: 0, pos: [0.28, -0.36, -0.6] },
 ];
 
 export const PROJECTILES = {

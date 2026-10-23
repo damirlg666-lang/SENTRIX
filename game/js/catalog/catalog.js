@@ -2,6 +2,8 @@
 import * as THREE from 'three';
 import { PROPS } from './props.js';
 import { MELEE_PROPS } from './melee.js';
+import { SYRINGES } from './syringes.js';
+import { MACHINES } from './machines.js';
 import { Prop } from '../entities/prop.js';
 import { Car } from '../entities/vehicle.js';
 
@@ -43,6 +45,16 @@ export const CATEGORIES = [
       propItem(MELEE_PROPS.knife, { desc: 'Place on someone to stab' }),
       propItem(MELEE_PROPS.sword, { desc: 'Throw it or drag it fast' }),
       propItem(MELEE_PROPS.axe, { desc: 'Heavy chops take limbs' }),
+    ],
+  },
+  {
+    id: 'syringes',
+    name: 'Syringes',
+    items: [
+      propItem(SYRINGES.adrenaline, { desc: 'Wakes, faster, stronger' }),
+      propItem(SYRINGES.life, { desc: 'Heals, mends, revives' }),
+      propItem(SYRINGES.acid, { desc: 'Dissolves from inside' }),
+      propItem(SYRINGES.sedative, { desc: 'Out cold for a minute' }),
     ],
   },
   {
@@ -126,6 +138,11 @@ export const CATEGORIES = [
         },
       },
     ],
+  },
+  {
+    id: 'machines',
+    name: 'Machines',
+    items: [propItem(MACHINES.thruster, { desc: 'Stick it on, press G' })],
   },
   {
     id: 'vehicles',

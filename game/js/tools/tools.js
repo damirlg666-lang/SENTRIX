@@ -245,8 +245,15 @@ export class Tools {
     }
     if (code === 'KeyG') {
       const e = this.hover?.owner?.entity;
+      if (e && e.kind === 'person') {
+        // toggles anything stuck in them that can be switched on (thrusters)
+        const stuck = this.game.entities.filter((x) => x.embedded?.entity === e && x.def?.onActivate);
+        for (const x of stuck) x.activate();
+        if (stuck.length) this.emit('toast', stuck[0].def.activateText?.(stuck[0]) ?? 'Activated');
+        return stuck.length > 0;
+      }
       if (e && e.activate && !e.removed) {
-        if (e.activate()) this.emit('toast', e.kind === 'vehicle' ? (e.driving ? 'Engine on' : 'Engine off') : `${e.name} armed`);
+        if (e.activate()) this.emit('toast', e.kind === 'vehicle' ? (e.driving ? 'Engine on' : 'Engine off') : e.def?.activateText ? e.def.activateText(e) : `${e.name} armed`);
         return true;
       }
     }
@@ -559,14 +566,14 @@ export class Tools {
     const p = base.clone();
     if (w.melee === 'slash') {
       const s = this.swingSide;
-      const th = active ? s * (1.1 - 3.1 * e) : 0.35;
-      d.set(Math.sin(th), Math.cos(th), -0.75);
+      const th = active ? s * (1.1 - 3.1 * e) : 0.45;
+      d.set(Math.sin(th) * 0.8, Math.cos(th) * 0.75, -1.25);
       if (active) {
         p.x += s * (0.12 - 0.3 * e);
         p.z -= Math.sin(k * Math.PI) * 0.12;
       }
     } else if (w.melee === 'chop') {
-      const ph = active ? -0.2 + 2.1 * e : 0.45;
+      const ph = active ? -0.2 + 2.1 * e : 0.75;
       d.set(0.12, Math.cos(ph), -Math.sin(ph));
       if (active) {
         p.y += 0.06 - 0.22 * e;

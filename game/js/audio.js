@@ -90,6 +90,25 @@ export class Audio {
     }
   }
 
+  panner(pos) {
+    const pan = this.ctx.createPanner();
+    pan.panningModel = 'equalpower';
+    pan.distanceModel = 'inverse';
+    pan.refDistance = 4;
+    pan.rolloffFactor = 1.1;
+    pan.maxDistance = 400;
+    this.placePanner(pan, pos);
+    return pan;
+  }
+
+  placePanner(pan, pos) {
+    if (pan.positionX) {
+      pan.positionX.value = pos.x;
+      pan.positionY.value = pos.y;
+      pan.positionZ.value = pos.z;
+    } else pan.setPosition(pos.x, pos.y, pos.z);
+  }
+
   /** Output node at a world position (or 2D if no position). Returns { input, end(t) }. */
   out(pos, gain = 1, reverb = 0.3) {
     const ctx = this.ctx;
@@ -97,17 +116,7 @@ export class Audio {
     g.gain.value = gain;
     let node = g;
     if (pos) {
-      const pan = ctx.createPanner();
-      pan.panningModel = 'equalpower';
-      pan.distanceModel = 'inverse';
-      pan.refDistance = 4;
-      pan.rolloffFactor = 1.1;
-      pan.maxDistance = 400;
-      if (pan.positionX) {
-        pan.positionX.value = pos.x;
-        pan.positionY.value = pos.y;
-        pan.positionZ.value = pos.z;
-      } else pan.setPosition(pos.x, pos.y, pos.z);
+      const pan = this.panner(pos);
       g.connect(pan);
       node = pan;
     }
@@ -402,6 +411,44 @@ export class Audio {
     g.connect(o);
     osc.start(t);
     osc.stop(t + 0.1);
+  }
+
+  /**
+   * A continuous sound that follows something around (thruster roar, flamethrower).
+   * Returns { setPos(v), stop() } or null while audio is locked.
+   */
+  loop(kind, pos) {
+    if (!this.canPlay()) return null;
+    const ctx = this.ctx;
+    const cfg = { thruster: ['lowpass', 650, 0.6, 0.7], flame: ['bandpass', 1100, 0.45, 0.6] }[kind] || ['lowpass', 800, 0.4, 0.7];
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    src.loop = true;
+    src.playbackRate.value = this.rate;
+    const f = ctx.createBiquadFilter();
+    f.type = cfg[0];
+    f.frequency.value = cfg[1];
+    f.Q.value = cfg[3];
+    const g = ctx.createGain();
+    g.gain.value = 0.0001;
+    g.gain.setTargetAtTime(cfg[2], ctx.currentTime, 0.05);
+    const pan = this.panner(pos);
+    src.connect(f);
+    f.connect(g);
+    g.connect(pan);
+    pan.connect(this.master);
+    src.start(ctx.currentTime, Math.random());
+    let stopped = false;
+    return {
+      setPos: (p) => this.placePanner(pan, p),
+      stop: () => {
+        if (stopped) return;
+        stopped = true;
+        const t = ctx.currentTime;
+        g.gain.setTargetAtTime(0.0001, t, 0.06);
+        src.stop(t + 0.5);
+      },
+    };
   }
 
   /** Bone snapping: a dry, bright crack with a short woody knock. */

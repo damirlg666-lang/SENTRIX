@@ -10,6 +10,7 @@ import { createCharacterMesh, randomOutfit, dummyOutfit, paintDamage, clearDamag
 import {
   initInjuries, legsDisabled, injuryText, bulletTrauma, impactTrauma, checkTearing, updateSpurts, healInjuries, fatalLoss,
 } from './injury.js';
+import { initChem, updateChem, chemBoost, chemStatus, clearChem } from './chem.js';
 
 export const ST = {
   ACTIVE: 'active',
@@ -134,6 +135,7 @@ export class Person extends Entity {
     this.mass = this.ragdoll.totalMass;
     this.standH = this.sk.centers[B.PELVIS][1] - 0.015;
     initInjuries(this);
+    initChem(this);
 
     if (!opts.headless) {
       this.ch = createCharacterMesh(type, this.outfit, opts.quality || 'high');
@@ -200,6 +202,12 @@ export class Person extends Entity {
   }
 
   statusText() {
+    const base = this.baseStatus();
+    const chem = this.alive ? chemStatus(this) : '';
+    return chem ? `${base} · ${chem}` : base;
+  }
+
+  baseStatus() {
     if (this.controlled && this.alive) return 'Controlled by you';
     if (this.held && this.conscious) return 'Panicking!';
     switch (this.state) {
@@ -233,6 +241,7 @@ export class Person extends Entity {
     this.time += dt;
     this.stateTime += dt;
     this.updateVitals(dt);
+    updateChem(this, dt);
     const pv = this.prevVel;
     let cx = 0, cy = 0, cz = 0;
     for (let i = 0; i < BONE_COUNT; i++) {
@@ -382,6 +391,7 @@ export class Person extends Entity {
       p[B.HEAD][1] += this.lookYaw;
       p[B.HEAD][0] += this.lookPitch;
     }
+    if (this.state === ST.ACTIVE || this.state === ST.GETUP) strength *= chemBoost(this).strength;
     this.strength += (strength - this.strength) * Math.min(1, dt * 6);
     this.support = support;
     if (!sleeping || this.state !== ST.DEAD) rd.drive(p, this.strength, this.punchTime > 0 ? PUNCH_BOOST[this.punchSide] : null);
@@ -391,7 +401,9 @@ export class Person extends Entity {
   }
 
   canStand() {
-    return this.conscious && this.health > 12 && this.blood > 35 && this.state !== ST.UNCONSCIOUS && !legsDisabled(this);
+    // adrenaline keeps people going on very little
+    const tough = this.chem.adrenaline > 0.2;
+    return this.conscious && this.health > (tough ? 4 : 12) && this.blood > (tough ? 22 : 35) && this.state !== ST.UNCONSCIOUS && !legsDisabled(this);
   }
 
   fall() {
@@ -616,6 +628,7 @@ export class Person extends Entity {
       }
     }
     if (this.pain > 0.5) desired *= 0.6;
+    desired *= chemBoost(this).speed;
     this.desiredSpeed += (desired - this.desiredSpeed) * Math.min(1, dt * 3);
     this.yaw = turnToward(this.yaw, this.heading, dt * 5);
 
@@ -640,6 +653,7 @@ export class Person extends Entity {
       desired = inp.run ? 3.7 : 1.7;
     }
     if (this.pain > 0.5) desired *= 0.7;
+    desired *= chemBoost(this).speed;
     this.desiredSpeed += (desired - this.desiredSpeed) * Math.min(1, dt * 6);
     this.yaw = turnToward(this.yaw, this.heading, dt * 9);
     this.lookYaw += (0 - this.lookYaw) * Math.min(1, dt * 5);
@@ -738,7 +752,7 @@ export class Person extends Entity {
     this.pain = Math.max(0, this.pain - dt * 0.03);
     this.stun = Math.max(0, this.stun - dt * 0.8);
     this.voiceCooldown -= dt;
-    if (this.blood < 30 && this.state !== ST.UNCONSCIOUS) this.knockOut(6 + Math.random() * 6);
+    if (this.blood < (this.chem.adrenaline > 0.2 ? 20 : 30) && this.state !== ST.UNCONSCIOUS) this.knockOut(6 + Math.random() * 6);
     if (this.blood <= 8 || this.health <= 0) this.die();
   }
 
@@ -891,6 +905,7 @@ export class Person extends Entity {
   /** Returns false when the injuries are beyond healing (no head, cut in half). */
   heal() {
     healInjuries(this);
+    clearChem(this);
     if (fatalLoss(this)) {
       this.bleed = 0;
       return false;
