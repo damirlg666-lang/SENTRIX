@@ -180,6 +180,7 @@ export class Car extends Entity {
       this.bodies.push(wb);
     }
     this.health = 450;
+    this.maxHealth = 450;
     this.driving = false;
     this.smokeT = 0;
     this.prevVel = new THREE.Vector3();

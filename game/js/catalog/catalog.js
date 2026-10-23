@@ -14,7 +14,7 @@ function propItem(def, extra = {}) {
     height: def.size ?? 0.5,
     spawn(game, point, yaw) {
       const p = point.clone();
-      p.y += (def.size ?? 0.5) / 2 + 0.02 + (extra.lift ?? 0);
+      p.y += (def.bottom ?? (def.size ?? 0.5) / 2) + 0.02 + (extra.lift ?? 0);
       return game.add(new Prop(game, def, p, yawQ(yaw), extra.opts || {}));
     },
     ...extra,

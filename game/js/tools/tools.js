@@ -828,7 +828,7 @@ export class Tools {
         built.mesh.traverse((o) => {
           if (o.isMesh) o.material = this.ghostMat;
         });
-        built.mesh.position.y = (def.size ?? 0.5) / 2 + 0.02;
+        built.mesh.position.y = (def.bottom ?? (def.size ?? 0.5) / 2) + 0.02;
         g.add(built.mesh);
       }
       this.ghostCache.set(item.id, g);

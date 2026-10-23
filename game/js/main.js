@@ -154,6 +154,9 @@ function bindInput(game) {
   canvas.addEventListener('pointerleave', () => (ui.pointerOverUI = true));
   canvas.addEventListener('pointerenter', () => (ui.pointerOverUI = false));
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  canvas.addEventListener('mousedown', (e) => {
+    if (e.button === 1) e.preventDefault(); // no autoscroll on middle click
+  });
   canvas.addEventListener(
     'wheel',
     (e) => {

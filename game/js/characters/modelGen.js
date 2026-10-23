@@ -3,6 +3,7 @@
 // in local frames and placed per body type when the template is assembled.
 import { SDFModel, meshSDF, skinFromParts, roundCone, capsule, sphere, ellipsoid, roundBox, rotMat } from './sdf.js';
 import { B, makeSkeleton, ARM_ANGLE } from './skeleton.js';
+import { decimate, compact } from './decimate.js';
 
 export const L = {
   HEAD: 1, LIPS: 2, HAIR: 4, HAND: 5, NECK: 6, TORSO: 7, UARM: 8, FARM: 9, PELVIS: 10,
@@ -253,31 +254,75 @@ function cellsFor(quality) {
   return QUALITY_CELLS[quality] || QUALITY_CELLS.high;
 }
 
+// Simplification settings: surface nets give uniform density, so flat areas are thinned out
+// while curvature (face, fingers, joints) keeps its vertices.
+const SIMPLIFY = {
+  body: { ratio: 0.42, err: 0.3 },
+  head: { ratio: 0.5, err: 0.22 },
+  hand: { ratio: 0.42, err: 0.3 },
+  hair: { ratio: 0.36, err: 0.4 },
+};
+
+function simplify(mesh, extra, kind, cell, penalty) {
+  const cfg = SIMPLIFY[kind];
+  const r = decimate(mesh.positions, mesh.indices, { ratio: cfg.ratio, maxError: cell * cfg.err, penalty });
+  const out = {
+    positions: compact(mesh.positions, 3, r.remap, r.count),
+    normals: compact(mesh.normals, 3, r.remap, r.count),
+    indices: r.indices,
+  };
+  for (const [name, size] of extra) out[name] = compact(mesh[name], size, r.remap, r.count);
+  return out;
+}
+
 /** Skinned body for a body type, in bind space. */
 export function genBody(typeName, quality) {
   const sk = makeSkeleton(typeName);
   const m = bodyModel(sk);
-  const mesh = meshModel(m, cellsFor(quality).body, 0.02);
+  const cell = cellsFor(quality).body;
+  const mesh = meshModel(m, cell, 0.02);
   const skin = skinFromParts(m, mesh.positions);
-  return { ...mesh, ...skin };
+  const full = { ...mesh, ...skin };
+  const W = skin.skinWeight;
+  const I = skin.skinIndex;
+  // weight difference between two vertices (sum of absolute per-bone differences)
+  const weightDiff = (a, b) => {
+    let d = 0;
+    for (let i = 0; i < 4; i++) {
+      const bi = I[a * 4 + i];
+      let wb = 0;
+      for (let k = 0; k < 4; k++) if (I[b * 4 + k] === bi) wb = W[b * 4 + k];
+      d += Math.abs(W[a * 4 + i] - wb);
+    }
+    return d;
+  };
+  const penalty = (a, b) => weightDiff(a, b) * 4e-5 + (skin.label[a] !== skin.label[b] ? 1e-5 : 0);
+  return simplify(full, [['skinIndex', 4], ['skinWeight', 4], ['label', 1], ['param', 1]], 'body', cell, penalty);
 }
 
 /** Head in head-local space (unit scale), with labels. */
 export function genHead(female, quality) {
   const m = headModel(female);
-  const mesh = meshModel(m, cellsFor(quality).head, 0.004);
+  const cell = cellsFor(quality).head;
+  const mesh = meshModel(m, cell, 0.004);
   const { label } = skinFromParts(m, mesh.positions);
-  return { ...mesh, label };
+  const P = mesh.positions;
+  // keep the face dense: painted features (brows, beard line) live there
+  const face = (i) => P[i * 3 + 2] > 0.035 && P[i * 3 + 1] > -0.1 && P[i * 3 + 1] < 0.06;
+  const penalty = (a, b) => (label[a] !== label[b] ? 2e-5 : 0) + (face(a) || face(b) ? 6e-6 : 0);
+  return simplify({ ...mesh, label }, [['label', 1]], 'head', cell, penalty);
 }
 
 /** Left hand in wrist-local space. */
 export function genHand(quality) {
-  return meshModel(handModel(), cellsFor(quality).hand, 0.004);
+  const cell = cellsFor(quality).hand;
+  return simplify(meshModel(handModel(), cell, 0.004), [], 'hand', cell);
 }
 
 /** Hair in head-local space. */
 export function genHair(style, quality) {
-  return meshModel(hairModel(style), cellsFor(quality).hair, 0.012);
+  const cell = cellsFor(quality).hair;
+  return simplify(meshModel(hairModel(style), cell, 0.012), [], 'hair', cell);
 }
 
 /** Run a generation job by name (used by the worker and the synchronous fallback). */

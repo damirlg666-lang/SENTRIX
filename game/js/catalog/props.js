@@ -485,7 +485,7 @@ PROPS.table = {
   }),
 };
 PROPS.chair = {
-  id: 'chair', name: 'Chair', material: 'wood', mass: 6, size: 0.5,
+  id: 'chair', name: 'Chair', material: 'wood', mass: 6, size: 0.5, bottom: 0.47,
   build: () => ({
     mesh: chairModel(),
     colliders: [cuboid(0.225, 0.02, 0.225), ...[-0.19, 0.19].flatMap((x) => [-0.19, 0.19].map((z) => cuboid(0.02, 0.225, 0.02, x, -0.245, z))), cuboid(0.21, 0.25, 0.02, 0, 0.27, -0.19)],

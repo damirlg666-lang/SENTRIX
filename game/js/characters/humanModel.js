@@ -317,7 +317,7 @@ export function paintCharacter(tpl, outfit) {
   const mat = new Float32Array(nv * 2);
   const layer = new Float32Array(nv * 4).fill(-1);
   const layer2 = new Float32Array(nv * 2).fill(-1);
-  const cloth = new Float32Array(nv * 2).fill(1);
+  const cloth = new Float32Array(nv * 3).fill(1);
   const face = new Float32Array(nv * 2).fill(-1);
 
   const skin = new THREE.Color(outfit.skin);
@@ -343,6 +343,9 @@ export function paintCharacter(tpl, outfit) {
   const legHem = bt === 'shorts' ? j.kneeL[1] + 0.12 : bt === 'skirt' ? j.kneeL[1] + 0.07 : 0.1;
   const topThick = tt === 'jacket' ? 0.0085 : tt === 'hoodie' ? 0.0065 : 0.0034;
   const armpitY = j.chestC[1];
+  const neckZ = j.neck[2] + 0.005;
+  const collarR = tt === 'tank' ? 0.1 : tt === 'vneck' ? 0.072 : 0.066;
+  const collarFront = tt === 'vneck' || tt === 'tank' ? 0.35 : 1.15; // deep fronts reach down the chest
   const strapX = 0.095 * sw;
 
   const neckLine = (x, z) => {
@@ -408,7 +411,7 @@ export function paintCharacter(tpl, outfit) {
       if (lab === L.FOOT) c.copy(shoe);
       // Coverage is split into linear fields (hem, neckline, sleeve end...) that the shader
       // combines per pixel, so hems stay crisp even where they cross mesh triangles.
-      let sBottom = -1, sTopRest = 1, sTop2 = -1, torso = -1, leg = -1, neck = 1, sleeve = 1;
+      let sBottom = -1, sTopRest = 1, sTop2 = -1, torso = -1, leg = -1, neck = 1, sleeve = 1, collar = 1;
       if (isLeg) {
         sBottom = y - legHem;
         sTopRest = -1;
@@ -423,8 +426,11 @@ export function paintCharacter(tpl, outfit) {
         sBottom = waistY - y;
         sTopRest = y - hemY;
         neck = neckLine(x, z) - y;
+        // the collar opening is a ring around the neck, so shoulders stay covered
+        const dz = z - neckZ;
+        collar = Math.hypot(x, dz * (dz > 0 ? collarFront : 1.15)) - collarR;
         if (tt === 'tank') sTopRest = Math.min(sTopRest, Math.max(strapX - Math.abs(x), armpitY - y));
-        const sTop = Math.min(sTopRest, neck);
+        const sTop = Math.min(sTopRest, Math.max(neck, collar));
         if (tt === 'jacket') sTop2 = Math.min(0.034 - Math.abs(x), z - 0.012, sTop + 0.02);
         else if (tt === 'hoodie') sTop2 = Math.min(sTop, hemY + 0.045 - y);
         else if (tt === 'polo') sTop2 = Math.min(0.012 - Math.abs(x), y - (j.chestC[1] + 0.045), z - 0.03, sTop + 0.01);
@@ -435,9 +441,10 @@ export function paintCharacter(tpl, outfit) {
       layer[v * 4 + 2] = sTop2;
       layer[v * 4 + 3] = torso;
       layer2[v * 2] = leg;
-      cloth[v * 2] = neck;
-      cloth[v * 2 + 1] = sleeve;
-      const sTop = Math.min(sTopRest, neck, sleeve);
+      cloth[v * 3] = neck;
+      cloth[v * 3 + 1] = sleeve;
+      cloth[v * 3 + 2] = collar;
+      const sTop = Math.min(sTopRest, Math.max(neck, collar), sleeve);
       const sBelt = torso > 0 ? 0.0115 - Math.abs(y - beltY) : -1;
       const sSock = leg > 0 ? 0.2 - y : -1;
       // cloth thickness: cumulative over covering layers, ramped so hems form a soft step
@@ -494,9 +501,9 @@ attribute vec4 aLayer;
 attribute vec2 aLayer2;
 attribute vec2 aDamage;
 attribute vec2 aFace;
-attribute vec2 aCloth;
+attribute vec3 aCloth;
 varying vec2 vFace;
-varying vec2 vCloth;
+varying vec3 vCloth;
 varying vec2 vMat;
 varying vec4 vLayer;
 varying vec2 vLayer2;
@@ -513,7 +520,7 @@ uniform float uBeard;
 uniform vec2 uTrim;
 uniform float uBeltY;
 varying vec2 vFace;
-varying vec2 vCloth;
+varying vec3 vCloth;
 varying vec2 vMat;
 varying vec4 vLayer;
 varying vec2 vLayer2;
@@ -553,9 +560,10 @@ a = cover(min(legs, 0.113 - vBind.y));
 float sole = cover(0.022 - vBind.y);
 col = mix(col, mix(uLayerColor[1], uSole, sole), a); gMat = mix(gMat, mix(uLayerMat[1], vec2(0.85, 1.0), sole), a);
 a = cover(vLayer.x); col = mix(col, uLayerColor[2], a); gMat = mix(gMat, uLayerMat[2], a);
-float top = min(vLayer.y, min(vCloth.x, vCloth.y));
+float neck = max(vCloth.x, vCloth.z);
+float top = min(vLayer.y, min(neck, vCloth.y));
 a = cover(top); col = mix(col, uLayerColor[3], a); gMat = mix(gMat, uLayerMat[3], a);
-float top2 = max(vLayer.z, min(top, max(uTrim.x - vCloth.x, uTrim.y - vCloth.y)));
+float top2 = max(vLayer.z, min(top, max(uTrim.x - neck, uTrim.y - vCloth.y)));
 a = cover(top2); col = mix(col, uLayerColor[4], a); gMat = mix(gMat, uLayerMat[4], a);
 a = cover(min(vLayer.w, 0.0115 - abs(vBind.y - uBeltY))); col = mix(col, uLayerColor[5], a); gMat = mix(gMat, uLayerMat[5], a);
 float blood = clamp(vDamage.x, 0.0, 1.0);
@@ -634,7 +642,7 @@ export function makeCharacterMaterial(outfit) {
     Object.assign(shader.uniforms, this.userData.uniforms);
     patchShader(shader);
   };
-  m.customProgramCacheKey = () => 'ragdoll-character-v4';
+  m.customProgramCacheKey = () => 'ragdoll-character-v5';
   return m;
 }
 
@@ -670,7 +678,7 @@ function lidGeometry(skinHex) {
   g.setAttribute('aLayer2', new THREE.BufferAttribute(new Float32Array(n * 2).fill(-1), 2));
   g.setAttribute('aDamage', new THREE.BufferAttribute(new Float32Array(n * 2), 2));
   g.setAttribute('aFace', new THREE.BufferAttribute(new Float32Array(n * 2).fill(-1), 2));
-  g.setAttribute('aCloth', new THREE.BufferAttribute(new Float32Array(n * 2).fill(1), 2));
+  g.setAttribute('aCloth', new THREE.BufferAttribute(new Float32Array(n * 3).fill(1), 3));
   g.setIndex(lidGeo.index);
   return g;
 }
@@ -691,7 +699,7 @@ export function createCharacterMesh(type, outfit, quality = 'high') {
   geo.setAttribute('aLayer', new THREE.BufferAttribute(painted.layer, 4));
   geo.setAttribute('aLayer2', new THREE.BufferAttribute(painted.layer2, 2));
   geo.setAttribute('aFace', new THREE.BufferAttribute(painted.face, 2));
-  geo.setAttribute('aCloth', new THREE.BufferAttribute(painted.cloth, 2));
+  geo.setAttribute('aCloth', new THREE.BufferAttribute(painted.cloth, 3));
   const damage = new THREE.BufferAttribute(new Float32Array(tpl.vertexCount * 2), 2);
   damage.setUsage(THREE.DynamicDrawUsage);
   geo.setAttribute('aDamage', damage);

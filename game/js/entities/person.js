@@ -52,7 +52,7 @@ function lerpPose(out, a, b, t) {
 }
 
 /** Neutral standing pose (relative to the A-pose bind). */
-function standPose(p, armDown = 0.5) {
+function standPose(p, armDown = 0.57) {
   set(p, B.SPINE, 0.02);
   set(p, B.CHEST, 0.0);
   set(p, B.HEAD, 0.04);
@@ -240,11 +240,13 @@ export class Person extends Entity {
     cv[1] = cy;
     cv[2] = cz;
     // decaying sum approximates the speed lost over the last ~0.1 s; damage is applied once per jolt peak
+    // (being dragged around by the hand tool is jerky, so it gets a higher tolerance)
+    const joltLimit = this.held ? 5.5 : 3.6;
     this.jolt = this.jolt * Math.exp(-dt / 0.08) + (this.time > 0.3 ? dvCom : 0);
-    if (this.jolt > 3.6) this.joltPeak = Math.max(this.joltPeak, this.jolt);
+    if (this.jolt > joltLimit) this.joltPeak = Math.max(this.joltPeak, this.jolt);
     else if (this.joltPeak > 0) {
       const t = rd.bodies[B.PELVIS].translation();
-      this.damage({ amount: (this.joltPeak - 3.6) * 18, part: B.PELVIS, point: _v2.set(t.x, t.y, t.z), kind: 'blunt' });
+      this.damage({ amount: Math.max(0, this.joltPeak - joltLimit) * 18, part: B.PELVIS, point: _v2.set(t.x, t.y, t.z), kind: 'blunt' });
       if (this.joltPeak > 5) this.stun += 1;
       this.joltPeak = 0;
     }
