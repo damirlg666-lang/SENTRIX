@@ -19,6 +19,9 @@ const M = {
   glass: () => new THREE.MeshPhysicalMaterial({ color: 0x0a1630, roughness: 0.05, metalness: 0.4, clearcoat: 1 }),
   brass: () => new THREE.MeshStandardMaterial({ color: 0xb08d3c, roughness: 0.3, metalness: 1 }),
   warhead: () => new THREE.MeshStandardMaterial({ color: 0x5c6b3a, roughness: 0.5, metalness: 0.3 }),
+  red: () => new THREE.MeshStandardMaterial({ color: 0xa3201a, roughness: 0.35, metalness: 0.5 }),
+  yellow: () => new THREE.MeshStandardMaterial({ color: 0xf2c31b, roughness: 0.5, metalness: 0.05 }),
+  pilot: () => new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 0.75, 2.2), toneMapped: false }),
 };
 const cache = {};
 const m = (k) => (cache[k] ??= M[k]());
@@ -96,6 +99,30 @@ function launcherModel() {
   return g;
 }
 
+function flamethrowerModel() {
+  const g = group([
+    [[cyl(0.045, 0.045, 0.3, 0, -0.07, 0.02, 24), new THREE.SphereGeometry(0.045, 20, 12).scale(1, 1, 0.5).rotateX(Math.PI / 2).translate(0, -0.07, -0.13), new THREE.SphereGeometry(0.045, 20, 12).scale(1, 1, 0.5).rotateX(Math.PI / 2).translate(0, -0.07, 0.17)], 'red'],
+    [[cyl(0.012, 0.012, 0.55, 0, 0.02, -0.28), cyl(0.02, 0.016, 0.06, 0, 0.02, -0.57)], 'gunmetal'],
+    [[rb(0.04, 0.05, 0.22, 0.01, 0, 0.0, 0.02), rb(0.03, 0.11, 0.045, 0.008, 0, -0.07, 0.11).rotateX(0.25), rb(0.03, 0.09, 0.04, 0.008, 0, -0.03, -0.3).rotateX(-0.2)], 'black'],
+    [[cyl(0.008, 0.008, 0.08, 0, -0.012, -0.55)], 'brass'],
+  ]);
+  const pilot = new THREE.Mesh(new THREE.SphereGeometry(0.007, 10, 8).scale(1, 1, 2.2), m('pilot'));
+  pilot.position.set(0, -0.012, -0.6);
+  g.add(pilot);
+  g.userData.muzzle = new THREE.Vector3(0, 0.02, -0.62);
+  return g;
+}
+
+function taserModel() {
+  const g = group([
+    [[rb(0.036, 0.05, 0.15, 0.01, 0, 0.012, -0.03)], 'yellow'],
+    [[rb(0.03, 0.1, 0.045, 0.01, 0, -0.055, 0.03).rotateX(0.22), rb(0.04, 0.05, 0.02, 0.006, 0, 0.012, -0.115)], 'polymer'],
+    [[cyl(0.003, 0.003, 0.02, -0.01, 0.012, -0.13, 8), cyl(0.003, 0.003, 0.02, 0.01, 0.012, -0.13, 8)], 'gunmetal'],
+  ]);
+  g.userData.muzzle = new THREE.Vector3(0, 0.012, -0.14);
+  return g;
+}
+
 export function grenadeModel() {
   const g = new THREE.Group();
   const body = new THREE.Mesh(new THREE.SphereGeometry(0.035, 20, 14), m('olive'));
@@ -136,6 +163,8 @@ export const WEAPONS = [
   { id: 'knife', name: 'Knife', model: knifeModel, melee: 'stab', damage: 24, rate: 0.3, impulse: 6, sever: 0.08, recoil: 0, pos: [0.2, -0.17, -0.42] },
   { id: 'sword', name: 'Sword', model: swordModel, melee: 'slash', damage: 32, rate: 0.42, impulse: 14, sever: 0.8, recoil: 0, pos: [0.3, -0.36, -0.62] },
   { id: 'axe', name: 'Axe', model: axeModel, melee: 'chop', damage: 46, rate: 0.62, impulse: 22, sever: 0.9, breakChance: 0.5, recoil: 0, pos: [0.28, -0.36, -0.6] },
+  { id: 'flamethrower', name: 'Flamethrower', model: flamethrowerModel, flame: true, rate: 0.03, auto: true, recoil: 0, pos: [0.22, -0.18, -0.56] },
+  { id: 'taser', name: 'Taser', model: taserModel, zap: true, rate: 0.45, recoil: 0.05, pos: [0.2, -0.14, -0.44] },
 ];
 
 export const PROJECTILES = {

@@ -7,6 +7,7 @@ import { Person, ST } from './entities/person.js';
 import { Prop } from './entities/prop.js';
 import { BODY_TYPES } from './characters/skeleton.js';
 import { blastTrauma } from './entities/injury.js';
+import { FireSystem } from './fx/fire.js';
 
 const _v = new THREE.Vector3();
 const _d = new THREE.Vector3();
@@ -98,6 +99,7 @@ export class Game {
     this.cam.goalPitch = this.cam.pitch = 0.3;
     this.cam.goalDist = this.cam.dist = 15;
     this.physics.setGravity(this.settings.gravity);
+    this.fire = new FireSystem(this);
   }
 
   // ------------------------------------------------------------------ entities
@@ -133,6 +135,7 @@ export class Game {
     for (const e of [...this.entities]) this.remove(e);
     this.spawnHistory.length = 0;
     this.fx?.clearDecals();
+    this.fire?.clear();
     this.tools?.reset();
   }
 
@@ -178,6 +181,7 @@ export class Game {
     const camD = this.camera.position.distanceTo(p);
     this.cam.shake(Math.min(1.2, (1.4 * power) / (1 + camD / 7)));
     this.noise(p, 8 * power);
+    this.fire?.igniteNear(p, radius * 0.35, 0.65);
     for (const e of [...this.entities]) {
       if (e === source || e.removed) continue;
       if (e.kind === 'person') {
@@ -262,6 +266,7 @@ export class Game {
         this.physics.step(h);
         this.simTime += h;
       }
+      this.fire?.update(simDt);
       // remove things that fell out of the world
       for (const e of [...this.entities]) {
         const b = e.bodies[0];

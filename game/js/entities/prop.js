@@ -203,6 +203,7 @@ export class Prop extends Entity {
     this.game.scene.remove(this.mesh);
     // every prop builds its own geometry (materials are shared and stay alive)
     this.mesh.traverse((o) => o.geometry?.dispose());
+    for (const m of this.charMats ?? []) m.dispose();
     this.def.onDestroy?.(this);
   }
 }

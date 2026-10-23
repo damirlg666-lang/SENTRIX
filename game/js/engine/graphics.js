@@ -85,6 +85,9 @@ export class Graphics {
       this.scene.add(l);
       this.flashes.push(l);
     }
+    // one persistent light for the fire nearest the camera
+    this.fireLight = new THREE.PointLight(0xff7a2a, 0, 9, 2);
+    this.scene.add(this.fireLight);
 
     this.pmrem = new THREE.PMREMGenerator(renderer);
     this.envTarget = null;

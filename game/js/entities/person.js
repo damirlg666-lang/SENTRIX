@@ -208,6 +208,8 @@ export class Person extends Entity {
   }
 
   baseStatus() {
+    if (this.onFire && this.alive) return 'On fire!';
+    if (this.shockTime > 0) return 'Electrocuted!';
     if (this.controlled && this.alive) return 'Controlled by you';
     if (this.held && this.conscious) return 'Panicking!';
     switch (this.state) {
@@ -385,6 +387,21 @@ export class Person extends Entity {
         break;
       default:
         break;
+    }
+    // electrocution: every muscle fires at random (dead bodies twitch too)
+    if (this.shockTime > 0) {
+      this.shockTime -= dt;
+      this.shockJitter = (this.shockJitter ?? 0) - dt;
+      if (this.shockJitter <= 0 || !this.shockPose) {
+        this.shockJitter = 0.04 + Math.random() * 0.03;
+        this.shockPose = newPose();
+        for (let i = 1; i < BONE_COUNT; i++) set(this.shockPose, i, (Math.random() - 0.5) * 1.6, (Math.random() - 0.5) * 0.7, (Math.random() - 0.5) * 0.7);
+      }
+      // limp states keep their last pose, so start from a neutral one instead of accumulating
+      if (this.state === ST.DEAD || this.state === ST.UNCONSCIOUS) lerpPose(p, POSE_STAND, POSE_STAND, 0);
+      for (let i = 1; i < BONE_COUNT; i++) for (let k = 0; k < 3; k++) p[i][k] += this.shockPose[i][k];
+      strength = 1.2;
+      support = 0;
     }
     // head look
     if (this.conscious) {
@@ -826,6 +843,18 @@ export class Person extends Entity {
       paintDamage(this.ch, part, info.point, 0.25, Math.min(1, dmg / 40), 1);
     }
     if (info.kind === 'bullet' && info.dir) bulletTrauma(this, part, info.amount, info.dir);
+  }
+
+  /** Electric shock at a point: convulsions for `seconds`, burns, and a stopped heart if weak. */
+  shock(power, seconds, point, part = B.CHEST) {
+    if (this.removed) return;
+    this.shockTime = Math.max(this.shockTime ?? 0, seconds);
+    this.damage({ amount: 7 * power, part, point, kind: 'shock' });
+    this.stun += 1.5 * power;
+    if (this.state === ST.ACTIVE) this.fall();
+    if (this.alive && power >= 1 && this.health < 40 && Math.random() < 0.2 * power) this.die('electrocuted');
+    if (this.ch && point) paintDamage(this.ch, part, point, 0.035, 0.8, 1);
+    this.ragdoll.wake();
   }
 
   addWound(part, point) {

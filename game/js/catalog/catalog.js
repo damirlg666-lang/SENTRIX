@@ -142,7 +142,10 @@ export const CATEGORIES = [
   {
     id: 'machines',
     name: 'Machines',
-    items: [propItem(MACHINES.thruster, { desc: 'Stick it on, press G' })],
+    items: [
+      propItem(MACHINES.thruster, { desc: 'Stick it on, press G' }),
+      propItem(MACHINES.tesla, { desc: 'G to switch on' }),
+    ],
   },
   {
     id: 'vehicles',

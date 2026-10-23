@@ -451,6 +451,40 @@ export class Audio {
     };
   }
 
+  /** Electric discharge: a sharp crackle over a short mains-like buzz. */
+  zap(pos, strength = 1) {
+    if (!this.canPlay()) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const R = 1 / this.rate;
+    const o = this.out(pos, 0.55 * strength, 0.2);
+    for (let i = 0; i < 4; i++) {
+      const t0 = t + rnd(0, 0.08) * R;
+      const n = this.noiseSrc(0.04);
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = rnd(2500, 5000) * this.rate;
+      const g = ctx.createGain();
+      this.env(g, t0, 0.001, rnd(0.4, 1), 0.03 * R);
+      n.connect(hp);
+      hp.connect(g);
+      g.connect(o);
+    }
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.value = rnd(95, 125) * this.rate;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 1800;
+    const og = ctx.createGain();
+    this.env(og, t, 0.003, 0.35, 0.16 * R);
+    osc.connect(lp);
+    lp.connect(og);
+    og.connect(o);
+    osc.start(t);
+    osc.stop(t + 0.22 * R);
+  }
+
   /** Bone snapping: a dry, bright crack with a short woody knock. */
   crack(pos) {
     if (!this.canPlay()) return;

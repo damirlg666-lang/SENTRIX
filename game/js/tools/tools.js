@@ -302,6 +302,7 @@ export class Tools {
     this.updateControl();
     this.cooldown -= dt;
     if (this.active === 'weapon' && this.mouseDown && !this.spawnItem && this.weapon.auto) this.tryFire();
+    this.updateFlameSound(dt);
     this.updateViewmodel(dt);
     this.updateGrabVisual();
     this.updateGhost();
@@ -420,6 +421,14 @@ export class Tools {
       this.melee(w);
       return;
     }
+    if (w.flame) {
+      this.flame();
+      return;
+    }
+    if (w.zap) {
+      this.zap(w);
+      return;
+    }
     const game = this.game;
     const origin = this.rayOrigin.clone();
     const muzzle = this.muzzleWorld();
@@ -430,6 +439,7 @@ export class Tools {
     }
     game.audio?.gunshot(w.sound, muzzle);
     game.fx?.muzzleFlash(muzzle, this.rayDir, w.id === 'shotgun' ? 1.4 : w.id === 'sniper' ? 1.6 : 1);
+    this.vmLight.color.set(0xffd29a);
     this.vmLight.intensity = 6;
     game.cam.shake(w.id === 'sniper' ? 0.35 : w.id === 'shotgun' ? 0.28 : 0.08);
     game.noise(origin, w.id === 'sniper' ? 5 : 3);
@@ -522,6 +532,85 @@ export class Tools {
       prop.body.setLinvel({ x: v.x, y: v.y, z: v.z }, true);
       prop.body.setAngvel({ x: Math.random() * 10 - 5, y: Math.random() * 10 - 5, z: Math.random() * 10 - 5 }, true);
       game.audio?.whoosh(muzzle, 0.6);
+    }
+  }
+
+  /** One puff of the flamethrower: flame particles, and heat for anything in the cone. */
+  flame() {
+    const game = this.game;
+    const muzzle = this.muzzleWorld();
+    const dir = this.rayDir;
+    const fx = game.fx;
+    this.flaming = 0.12;
+    for (let i = 0; i < 5; i++) {
+      const s = 9 + Math.random() * 5;
+      const sp = 0.08;
+      const p = {
+        x: muzzle.x + dir.x * 0.05, y: muzzle.y + dir.y * 0.05, z: muzzle.z + dir.z * 0.05,
+        vx: (dir.x + (Math.random() - 0.5) * sp) * s, vy: (dir.y + (Math.random() - 0.5) * sp) * s, vz: (dir.z + (Math.random() - 0.5) * sp) * s,
+        drag: 1.5, grav: -1.6, life: 0.45 + Math.random() * 0.3, tile: 4 + (i % 4), fadeIn: 0.03,
+      };
+      // orange billows blended normally (so they never blow out to white) around a dimmer additive core
+      if (i < 4) fx?.alpha.add({ ...p, size0: 0.04, size1: 0.85, col0: [1, 0.66, 0.24], col1: [0.32, 0.1, 0.04], a0: 0.7, fadePow: 1.3 });
+      else fx?.additive.add({ ...p, size0: 0.03, size1: 0.5, col0: [0.9, 0.55, 0.18], col1: [0.4, 0.1, 0.02], a0: 0.45 });
+    }
+    if (Math.random() < 0.25) fx?.smoke(muzzle.clone().addScaledVector(dir, 4 + Math.random() * 2), 1, { size: 0.4, gray: 0.25, alpha: 0.3 });
+    this.vmLight.color.set(0xff8a3a);
+    this.vmLight.intensity = 3 + Math.random() * 2;
+    const range = 7;
+    const cos = Math.cos(0.22);
+    for (const e of game.entities) {
+      if (e.removed) continue;
+      const bodies = e.kind === 'person' ? e.bodies : e.bodies.slice(0, 1);
+      let inside = false;
+      for (const b of bodies) {
+        const t = b.translation();
+        const vx = t.x - muzzle.x, vy = t.y - muzzle.y, vz = t.z - muzzle.z;
+        const d = Math.hypot(vx, vy, vz);
+        if (d > range || d < 0.05 || (vx * dir.x + vy * dir.y + vz * dir.z) / d < cos) continue;
+        inside = true;
+        break;
+      }
+      if (!inside) continue;
+      game.fire?.heat(e, 0.12);
+      if (e.kind === 'person' && e.conscious) {
+        e.fear = 2;
+        e.fearFrom.copy(muzzle);
+      }
+    }
+    const h = this.hover;
+    if (h && h.toi < range + 2 && Math.random() < 0.06 && (!h.owner || h.owner.entity?.kind === 'static')) fx?.scorch.add(h.point, h.normal, 0.5 + Math.random() * 0.6);
+  }
+
+  /** Taser: an arc to whatever is under the cursor; people convulse. */
+  zap(w) {
+    const game = this.game;
+    const muzzle = this.muzzleWorld();
+    this.recoil = w.recoil;
+    const hit = this.hover;
+    const reach = hit && hit.toi < 40;
+    const end = reach ? hit.point.clone() : this.rayOrigin.clone().addScaledVector(this.rayDir, 12);
+    game.fx?.arc(muzzle, end, { life: 0.16, jag: 0.08 });
+    game.audio?.zap(end, 0.7);
+    game.gfx.flash(end, 0x8fb4ff, 25, 0.12, 6);
+    this.vmLight.color.set(0x9cc0ff);
+    this.vmLight.intensity = 5;
+    if (!reach) return;
+    game.fx?.sparks(end, hit.normal, 10, 4, [0.6, 0.8, 1.6]);
+    const e = hit.owner?.entity;
+    if (e?.kind === 'person') e.shock(0.7, 1.4, hit.point, hit.owner.part);
+    else if (e && e.kind !== 'static') e.impulse(this.rayDir.clone().multiplyScalar(4), hit.point, hit.owner.part);
+  }
+
+  updateFlameSound(dt) {
+    this.flaming = (this.flaming ?? 0) - dt;
+    if (this.flaming > 0) {
+      const m = this.muzzleWorld();
+      if (!this.flameSound) this.flameSound = this.game.audio?.loop('flame', m) ?? null;
+      this.flameSound?.setPos(m);
+    } else if (this.flameSound) {
+      this.flameSound.stop();
+      this.flameSound = null;
     }
   }
 
@@ -666,6 +755,11 @@ export class Tools {
     const hit = this.hover;
     const e = hit?.owner?.entity;
     if (!e || e.kind === 'static') return;
+    if (e.onFire) {
+      this.game.fire.extinguish(e);
+      this.emit('toast', 'Fire put out');
+      return;
+    }
     // releasing a pin takes priority
     const pin = this.pins.find((p) => p.entity === e);
     if (pin) {
@@ -740,6 +834,7 @@ export class Tools {
     const e = this.hover?.owner?.entity;
     if (!e || e.kind === 'static') return;
     let healed = true;
+    this.game.fire?.extinguish(e);
     if (e.heal) healed = e.heal() !== false;
     else if (isFinite(e.maxHealth)) e.health = e.maxHealth;
     const p = e.position(new THREE.Vector3());

@@ -330,6 +330,7 @@ export class Effects {
     this.pools = []; // growing blood pools under bleeding bodies
     this.rings = [];
     this.ringGeo = new THREE.RingGeometry(0.9, 1, 64).rotateX(-Math.PI / 2);
+    this.arcs = [];
   }
 
   setPixelScale(h) {
@@ -359,6 +360,7 @@ export class Effects {
       r.mesh.scale.set(s, 1, s);
       r.mesh.material.opacity = (1 - k) * 0.3;
     }
+    this.updateArcs(dt);
   }
 
   clearDecals() {
@@ -605,6 +607,71 @@ export class Effects {
     // scorch
     const hit = this.game.physics.raycast({ x: p.x, y: p.y + 0.5, z: p.z }, { x: 0, y: -1, z: 0 }, 2.5, null, GROUPS.queryStatic);
     if (hit && hit.owner?.entity?.kind === 'static') this.scorch.add(hit.point, hit.normal, rnd(2.8, 3.8) * s);
+  }
+
+  // ---------------------------------------------------------------- electricity
+  /** A jagged electric arc between two points, with a short side branch or two. */
+  arc(from, to, opts = {}) {
+    const life = opts.life ?? 0.14;
+    const jag = opts.jag ?? 0.12;
+    const color = opts.color ?? [0.55, 0.75, 1.7];
+    this.arcLine(from, to, jag, color, life, 1);
+    for (let b = 0; b < (opts.branches ?? 1); b++) {
+      const t = 0.25 + Math.random() * 0.5;
+      const s = from.clone().lerp(to, t);
+      const len = from.distanceTo(to) * (0.15 + Math.random() * 0.25);
+      const e = s.clone().add(new THREE.Vector3(rnd(-1, 1), rnd(-1, 1), rnd(-1, 1)).normalize().multiplyScalar(len));
+      this.arcLine(s, e, jag * 0.7, color, life * 0.8, 0.6);
+    }
+    for (const p of [from, to]) {
+      this.additive.add({ x: p.x, y: p.y, z: p.z, vx: 0, vy: 0, vz: 0, life: life * 0.8, size0: 0.16, size1: 0.08, col0: [color[0] * 0.5, color[1] * 0.5, color[2] * 0.7], tile: TILE.GLOW, a0: 0.7 });
+    }
+  }
+
+  arcLine(from, to, jag, color, life, strength) {
+    const d = to.clone().sub(from);
+    const dist = d.length();
+    const n = Math.max(5, Math.min(48, Math.round(dist / 0.1)));
+    const u = new THREE.Vector3().crossVectors(d, Math.abs(d.y) < 0.9 * dist ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)).normalize();
+    const v = new THREE.Vector3().crossVectors(d, u).normalize();
+    const amp = jag * Math.sqrt(dist);
+    const pts = [];
+    let ou = 0, ov = 0;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      // a random walk pinned at both ends keeps the bolt connected but wild in the middle
+      ou = ou * 0.55 + rnd(-1, 1);
+      ov = ov * 0.55 + rnd(-1, 1);
+      const env = Math.sin(Math.PI * t);
+      pts.push(from.clone().addScaledVector(d, t).addScaledVector(u, ou * amp * env).addScaledVector(v, ov * amp * env));
+    }
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const mat = new THREE.LineBasicMaterial({ color: new THREE.Color(color[0] * strength, color[1] * strength, color[2] * strength), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+    const line = new THREE.Line(geo, mat);
+    line.frustumCulled = false;
+    line.renderOrder = 5;
+    this.game.scene.add(line);
+    this.arcs.push({ line, t: 0, life });
+    // a few glows along the bolt give it some body
+    for (let i = 1; i < pts.length - 1; i += 3) {
+      const p = pts[i];
+      this.additive.add({ x: p.x, y: p.y, z: p.z, vx: 0, vy: 0, vz: 0, life: life * 0.7, size0: 0.12 * strength, size1: 0.06, col0: [0.4, 0.55, 1.3], tile: TILE.GLOW, a0: 0.7 });
+    }
+  }
+
+  updateArcs(dt) {
+    for (const a of [...this.arcs]) {
+      a.t += dt;
+      if (a.t >= a.life) {
+        this.game.scene.remove(a.line);
+        a.line.geometry.dispose();
+        a.line.material.dispose();
+        this.arcs.splice(this.arcs.indexOf(a), 1);
+        continue;
+      }
+      // flicker
+      a.line.material.opacity = (1 - a.t / a.life) * (0.6 + Math.random() * 0.4);
+    }
   }
 
   /** Small puff used when deleting/spawning things. */
