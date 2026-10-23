@@ -1,0 +1,2 @@
+Rapier 3D physics (@dimforge/rapier3d-compat 0.19.3)
+Licensed under the Apache License 2.0 - https://github.com/dimforge/rapier.js
