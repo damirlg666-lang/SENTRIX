@@ -304,15 +304,16 @@ button {
 /* ---------- Toolbar ---------- */
 #toolbar-wrap {
   position: fixed;
-  left: 50%;
+  left: 12px;
+  right: 12px;
   bottom: 14px;
-  transform: translateX(-50%);
   display: grid;
   justify-items: center;
   gap: 8px;
   z-index: 10;
-  max-width: calc(100% - 24px);
+  pointer-events: none;
 }
+#toolbar-wrap > * { pointer-events: auto; }
 #toolbar, #weapon-bar {
   display: flex;
   gap: 6px;

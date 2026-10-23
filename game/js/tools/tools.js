@@ -4,7 +4,6 @@ import * as THREE from 'three';
 import { R } from '../engine/physics.js';
 import { WEAPONS, PROJECTILES } from '../catalog/weapons.js';
 import { Prop } from '../entities/prop.js';
-import { ST } from '../entities/person.js';
 import { groundHeight } from '../world/map.js';
 
 export const TOOL_IDS = ['hand', 'weapon', 'explode', 'rope', 'push', 'freeze', 'heal', 'delete'];
@@ -447,7 +446,6 @@ export class Tools {
         game.fx?.bloodBurst(exitHit.point, dir, 1.1);
         e.wound(part, exitHit.point, 1.3);
       }
-      if (!e.alive || e.state !== ST.ACTIVE) this.maybePool(e, hit.point);
       if (pierce > 0) {
         const ex = exclude ? new Set([...exclude, ...handles]) : handles;
         this.shootRay((exitHit ? exitHit.point : farStart).clone().addScaledVector(dir, 0.02), dir, w, null, pierce - 1, dmgScale * 0.6, ex);
@@ -465,13 +463,6 @@ export class Tools {
       const ex = exclude ? new Set([...exclude, ...handles]) : handles;
       this.shootRay(hit.point.clone().addScaledVector(dir, 0.05), dir, w, null, pierce - 1, dmgScale * 0.5, ex);
     }
-  }
-
-  maybePool(person, point) {
-    person._pools = person._pools || 0;
-    if (person._pools >= 2 || this.game.settings.blood === false) return;
-    person._pools++;
-    this.game.fx?.bloodPool(person, point);
   }
 
   launch(w, muzzle) {

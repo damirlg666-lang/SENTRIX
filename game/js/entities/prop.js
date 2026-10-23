@@ -166,6 +166,8 @@ export class Prop extends Entity {
     super.destroy();
     this.game.physics.removeBody(this.body);
     this.game.scene.remove(this.mesh);
+    // every prop builds its own geometry (materials are shared and stay alive)
+    this.mesh.traverse((o) => o.geometry?.dispose());
     this.def.onDestroy?.(this);
   }
 }

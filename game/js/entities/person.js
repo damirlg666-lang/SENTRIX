@@ -171,6 +171,7 @@ export class Person extends Entity {
     this.lastHit = -10;
     this.voiceCooldown = 0;
     this.prevVel = new Float32Array(BONE_COUNT * 3);
+    this.wounds = [];
     this.comVel = new Float32Array(3);
     this.jolt = 0;
     this.joltPeak = 0;
@@ -659,6 +660,7 @@ export class Person extends Entity {
     this.lastHit = this.time;
     if (info.kind === 'bullet' || info.kind === 'cut') {
       this.bleed += dmg * 0.05 * (info.bleed ?? 1);
+      if (info.point) this.addWound(part, info.point);
     }
     if (info.point) {
       this.fear = Math.min(2, this.fear + 1.2);
@@ -687,6 +689,49 @@ export class Person extends Entity {
     }
     if (this.ch && info.kind === 'explosion' && info.point) {
       paintDamage(this.ch, part, info.point, 0.25, Math.min(1, dmg / 40), 1);
+    }
+  }
+
+  addWound(part, point) {
+    const b = this.ragdoll.bodies[part];
+    const t = b.translation();
+    const r = b.rotation();
+    _q.set(r.x, r.y, r.z, r.w).invert();
+    const local = new THREE.Vector3(point.x - t.x, point.y - t.y, point.z - t.z).applyQuaternion(_q);
+    this.wounds.push({ part, local });
+    if (this.wounds.length > 8) this.wounds.shift();
+  }
+
+  /** Blood dripping from open wounds and a pool under a body lying still. */
+  updateBleeding(dt) {
+    const fx = this.game.fx;
+    if (!fx || this.game.settings?.blood === false || dt <= 0) return;
+    if (this.bleed > 0.25 && this.wounds.length) {
+      this.dripTimer = (this.dripTimer ?? 0) - dt * Math.min(4, this.bleed);
+      if (this.dripTimer <= 0) {
+        this.dripTimer = 0.18 + Math.random() * 0.2;
+        const w = this.wounds[Math.floor(Math.random() * this.wounds.length)];
+        const b = this.ragdoll.bodies[w.part];
+        const t = b.translation();
+        const r = b.rotation();
+        _q.set(r.x, r.y, r.z, r.w);
+        const p = _v2.copy(w.local).applyQuaternion(_q).add(_v.set(t.x, t.y, t.z));
+        const v = b.linvel();
+        fx.addDrop(p, new THREE.Vector3(v.x * 0.5 + (Math.random() - 0.5) * 0.3, v.y * 0.5 - 0.2, v.z * 0.5 + (Math.random() - 0.5) * 0.3), 0.01 + Math.random() * 0.012);
+      }
+    }
+    const lying = this.state === ST.DOWN || this.state === ST.DEAD || this.state === ST.UNCONSCIOUS;
+    if (lying && this.bleed > 0.3 && this.stateTime > 1) {
+      const c = this.ragdoll.bodies[B.SPINE].translation();
+      const v = this.ragdoll.bodies[B.SPINE].linvel();
+      const still = Math.hypot(v.x, v.y, v.z) < 0.3;
+      const far = !this.poolAt || Math.hypot(c.x - this.poolAt.x, c.z - this.poolAt.z) > 1.2;
+      if (still && far && (this.poolCount ?? 0) < 3) {
+        if (fx.bloodPool(this, new THREE.Vector3(c.x, c.y, c.z))) {
+          this.poolAt = new THREE.Vector3(c.x, c.y, c.z);
+          this.poolCount = (this.poolCount ?? 0) + 1;
+        }
+      }
     }
   }
 
@@ -725,6 +770,7 @@ export class Person extends Entity {
     this.stun = 0;
     this.fear = 0;
     this.pale = 0;
+    this.wounds.length = 0;
     if (this.ch) {
       clearDamage(this.ch);
       this.ch.material.userData.uniforms.uPale.value = 0;
@@ -740,6 +786,7 @@ export class Person extends Entity {
   update(dt) {
     if (!this.ch) return;
     this.syncBones();
+    this.updateBleeding(dt);
     // eyes
     let lid = -0.45;
     if (this.state === ST.DEAD) lid = 0.12;
@@ -793,9 +840,18 @@ export class Person extends Entity {
     this.ragdoll.destroy();
     if (this.ch) {
       this.game.scene.remove(this.ch.root);
-      this.ch.geometry.dispose();
+      // template buffers are shared between people: detach them so dispose() only frees ours
+      const g = this.ch.geometry;
+      for (const k of ['normal', 'skinIndex', 'skinWeight']) g.deleteAttribute(k);
+      g.setIndex(null);
+      g.dispose();
       this.ch.material.dispose();
-      for (const l of this.ch.lids) l.geometry.dispose();
+      const lg = this.ch.lids[0]?.geometry;
+      if (lg) {
+        for (const k of ['position', 'normal']) lg.deleteAttribute(k);
+        lg.setIndex(null);
+        lg.dispose();
+      }
     }
   }
 }

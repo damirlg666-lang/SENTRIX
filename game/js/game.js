@@ -26,6 +26,12 @@ class Emitter {
 
 const SETTINGS_KEY = 'ragdoll-sandbox-settings';
 
+function defaultQuality() {
+  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && Math.min(window.screen.width, window.screen.height) < 820);
+  if (mobile) return 'low';
+  return (navigator.hardwareConcurrency || 4) <= 4 ? 'medium' : 'high';
+}
+
 export class Game {
   constructor(gfx) {
     this.gfx = gfx;
@@ -50,6 +56,7 @@ export class Game {
       fps: false,
     };
     this.loadSettings();
+    if (!this.hasSavedSettings) this.settings.quality = defaultQuality();
     this.audio = null;
     this.fx = null;
     this.ui = null;
@@ -64,6 +71,7 @@ export class Game {
   loadSettings() {
     try {
       const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+      this.hasSavedSettings = !!s.quality;
       Object.assign(this.settings, s);
     } catch {
       /* storage unavailable */
@@ -82,11 +90,12 @@ export class Game {
     this.map = new WorldMap(this.gfx, this.physics);
     this.map.build(progress);
     this.cam = new CameraController(this.camera, groundHeight);
-    this.cam.goalPivot.set(0, 1.0, 0);
+    // frame the starter scene, leaving room for the spawn menu on the left
+    this.cam.goalPivot.set(-3.2, 0.8, 1.2);
     this.cam.pivot.copy(this.cam.goalPivot);
-    this.cam.goalYaw = this.cam.yaw = 0.62;
+    this.cam.goalYaw = this.cam.yaw = 0.42;
     this.cam.goalPitch = this.cam.pitch = 0.3;
-    this.cam.goalDist = this.cam.dist = 13;
+    this.cam.goalDist = this.cam.dist = 15;
     this.physics.setGravity(this.settings.gravity);
   }
 

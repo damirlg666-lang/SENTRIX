@@ -35,14 +35,14 @@ function starterScene(game, crowd) {
     game.spawnPerson(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r), Math.random() * Math.PI * 2, { record: false });
   }
   if (crowd === 0) return;
-  game.add(new Car(game, new THREE.Vector3(-7.5, 0.05, 6), 0.35), false);
+  game.add(new Car(game, new THREE.Vector3(8.5, 0.05, 1.5), 2.1), false);
   const add = (def, x, y, z, yaw = 0) => game.add(new Prop(game, def, new THREE.Vector3(x, y, z), yawQ(yaw)), false);
-  add(PROPS.crate, 6.5, 0.42, 3.5, 0.2);
-  add(PROPS.crate, 6.6, 1.24, 3.45, 0.5);
-  add(PROPS.smallCrate, 7.5, 0.27, 2.6, 0.9);
-  add(PROPS.explosiveBarrel, 5.2, 0.46, 4.6);
-  add(PROPS.barrel, -4.5, 0.46, -3.5);
-  add(PROPS.barrel, -3.9, 0.46, -3.9);
+  add(PROPS.crate, -6, 0.42, -3, 0.2);
+  add(PROPS.crate, -5.9, 1.24, -3.05, 0.5);
+  add(PROPS.smallCrate, -5, 0.27, -3.9, 0.9);
+  add(PROPS.explosiveBarrel, -4.2, 0.46, -1.6);
+  add(PROPS.barrel, 4.5, 0.46, -4.5);
+  add(PROPS.barrel, 5.1, 0.46, -4.1);
   for (let i = 0; i < 4; i++) add(PROPS.cone, -1.5 + i * 1.1, 0.33, -6.5);
   add(PROPS.mattress, 11.2, 0.13, -7.6, 0.1);
 }
@@ -168,6 +168,7 @@ function bindInput(game) {
     const tag = e.target && e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
     tools.keysShift = e.shiftKey;
+    game.audio.unlock();
     if (e.code === 'Escape') {
       if (!ui.closeAnyModal() && !tools.cancel() && tools.grab) tools.release();
       return;

@@ -647,7 +647,7 @@ export class WorldMap {
     const rocks = this.makeRock(5);
     const placements = variants.map(() => []);
     const rockPlace = [];
-    const tries = 1400;
+    const tries = 1100;
     for (let i = 0; i < tries; i++) {
       const a = rnd() * Math.PI * 2;
       const r = 34 + Math.pow(rnd(), 0.8) * 210;
@@ -678,18 +678,25 @@ export class WorldMap {
     const m4 = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
-    const addInstanced = (parts, list) => {
-      for (const part of parts) {
-        const im = new THREE.InstancedMesh(part.geo, part.mat, list.length);
-        list.forEach((p, i) => {
-          q.setFromAxisAngle(up, p.ry);
-          m4.compose(new THREE.Vector3(p.x, p.y, p.z), q, new THREE.Vector3(p.s, p.s, p.s));
-          im.setMatrixAt(i, m4);
-        });
-        im.castShadow = true;
-        im.receiveShadow = true;
-        im.computeBoundingSphere();
-        this.group.add(im);
+    // near and far instances are split so only trees around the plaza render into the
+    // shadow map (instanced meshes are culled as a whole)
+    const addInstanced = (parts, all) => {
+      const near = all.filter((p) => Math.hypot(p.x, p.z) < 75);
+      const far = all.filter((p) => Math.hypot(p.x, p.z) >= 75);
+      for (const [list, shadows] of [[near, true], [far, false]]) {
+        if (!list.length) continue;
+        for (const part of parts) {
+          const im = new THREE.InstancedMesh(part.geo, part.mat, list.length);
+          list.forEach((p, i) => {
+            q.setFromAxisAngle(up, p.ry);
+            m4.compose(new THREE.Vector3(p.x, p.y, p.z), q, new THREE.Vector3(p.s, p.s, p.s));
+            im.setMatrixAt(i, m4);
+          });
+          im.castShadow = shadows;
+          im.receiveShadow = true;
+          im.computeBoundingSphere();
+          this.group.add(im);
+        }
       }
     };
     variants.forEach((parts, i) => addInstanced(parts, placements[i]));
@@ -718,7 +725,7 @@ export class WorldMap {
     const blobs = 7 + Math.floor(rnd() * 4);
     for (let i = 0; i < blobs; i++) {
       const r = 0.9 + rnd() * 0.9;
-      const g = smoothIco(r, 3);
+      const g = smoothIco(r, 2);
       displace(g, 0.28, seed * 10 + i);
       const a = rnd() * Math.PI * 2;
       const d = i === 0 ? 0 : 0.7 + rnd() * 1.0;
@@ -762,7 +769,7 @@ export class WorldMap {
   }
 
   makeRock(seed) {
-    const g = smoothIco(1, 3);
+    const g = smoothIco(1, 2);
     displace(g, 0.35, seed);
     g.scale(1, 0.65, 0.9);
     g.computeVertexNormals();
