@@ -292,7 +292,7 @@ export class Game {
       if (e.kind === 'person') {
         if (e.state === ST.DEAD) down++;
         else alive++;
-      } else objects++;
+      } else if (e.kind !== 'group') objects++;
     }
     return { alive, down, objects };
   }

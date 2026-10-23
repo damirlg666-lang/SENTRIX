@@ -254,6 +254,9 @@ export class UI {
           } else if (item.id === 'car') {
             obj = carModel(0xb3151b);
             this.thumbs.set(item.id, tr.render(obj, [1.2, 0.5, 1.3]));
+          } else if (item.model) {
+            obj = item.model();
+            this.thumbs.set(item.id, tr.render(obj, [1.2, 0.75, 1.6]));
           } else if (item.id === 'brickWall') {
             obj = new THREE.Group();
             for (let r = 0; r < 5; r++) {

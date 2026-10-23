@@ -33,6 +33,8 @@ export class Prop extends Entity {
       .setAngularDamping(def.angularDamping ?? 0.08)
       .setCcdEnabled(!!def.ccd);
     if (def.gravityScale !== undefined) bd.setGravityScale(def.gravityScale);
+    // building pieces start asleep so a structure stands until something disturbs it
+    if (opts.sleeping) bd.setSleeping(true);
     const body = game.physics.world.createRigidBody(bd);
     this.body = body;
     this.bodies = [body];
@@ -203,7 +205,9 @@ export class Prop extends Entity {
     this.game.physics.removeBody(this.body);
     this.game.scene.remove(this.mesh);
     // every prop builds its own geometry (materials are shared and stay alive)
-    this.mesh.traverse((o) => o.geometry?.dispose());
+    this.mesh.traverse((o) => {
+      if (!o.userData.sharedGeometry) o.geometry?.dispose();
+    });
     for (const m of this.charMats ?? []) m.dispose();
     this.def.onDestroy?.(this);
   }

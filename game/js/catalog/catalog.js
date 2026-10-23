@@ -5,6 +5,7 @@ import { MELEE_PROPS } from './melee.js';
 import { SYRINGES } from './syringes.js';
 import { MACHINES } from './machines.js';
 import { ROCKETS } from './rockets.js';
+import { BUILDINGS } from './buildings.js';
 import { Prop } from '../entities/prop.js';
 import { Car } from '../entities/vehicle.js';
 
@@ -151,6 +152,11 @@ export const CATEGORIES = [
       propItem(MACHINES.thruster, { desc: 'Stick it on, press G' }),
       propItem(MACHINES.tesla, { desc: 'G to switch on' }),
     ],
+  },
+  {
+    id: 'buildings',
+    name: 'Buildings',
+    items: BUILDINGS,
   },
   {
     id: 'vehicles',

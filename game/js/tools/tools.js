@@ -1094,6 +1094,11 @@ export class Tools {
         const b = new THREE.Mesh(new THREE.BoxGeometry(4.4, 1.1, 1.8), this.ghostMat);
         b.position.y = 0.85;
         g.add(b);
+      } else if (item.ghostBox) {
+        const [w, h, d] = item.ghostBox;
+        const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), this.ghostMat);
+        b.position.y = h / 2;
+        g.add(b);
       } else if (item.id === 'brickWall') {
         const b = new THREE.Mesh(new THREE.BoxGeometry(1.96, 0.92, 0.1), this.ghostMat);
         b.position.y = 0.46;
