@@ -166,17 +166,33 @@ function handModel() {
 // ------------------------------------------------------------------ hair (head-local frame)
 export const HAIR_STYLES = ['short', 'buzz', 'long', 'bob', 'ponytail', 'bun', 'afro', 'bald'];
 
+/** Hairline height (head-local units) for a style at a point on the scalp. */
+export function hairlineAt(style, x, z) {
+  let front = 0.06;
+  let back = -0.042;
+  if (style === 'buzz') front = 0.054;
+  if (style === 'long' || style === 'bob') {
+    back = -0.05 - (style === 'long' ? 0.135 : 0.075);
+    front = 0.052;
+  }
+  if (style === 'afro') front = 0.066;
+  const line = back + (front - back) * smoothstep(-0.07, 0.085, z);
+  // dip at the temples so the hairline is not a straight cut
+  return line + 0.012 * smoothstep(0.03, 0.06, Math.abs(x)) * smoothstep(0.0, 0.07, z);
+}
+
 function hairModel(style) {
   const m = new SDFModel();
   const o = { bone: B.HEAD, label: L.HAIR };
-  let front = 0.06;
-  let back = -0.042;
-  let shell = [0.0865, 0.1035, 0.1095];
-  if (style === 'buzz') {
-    shell = [0.0802, 0.097, 0.1032];
-    front = 0.054;
-  }
-  m.add(ellipsoid([0, 0.033, -0.016], shell), { ...o, k: 0.02 });
+  // shell over the scalp that thins out toward the hairline (no helmet-like ledge)
+  const scalp = ellipsoid([0, 0.031, -0.015], [0.0778, 0.0948, 0.1008]);
+  const full = style === 'buzz' ? 0.0012 : 0.0078;
+  const shell = (x, y, z) => {
+    const hl = hairlineAt(style, x, z);
+    return scalp(x, y, z) - (0.0016 + full * smoothstep(hl, hl + 0.035, y));
+  };
+  shell.aabb = scalp.aabb.map((v, i) => v + (i < 3 ? -0.012 : 0.012));
+  m.add(shell, { ...o, k: 0.02 });
   if (style === 'short') {
     m.add(ellipsoid([0.014, 0.09, 0.04], [0.064, 0.034, 0.05]), { ...o, k: 0.035 });
     m.add(ellipsoid([0, 0.07, -0.05], [0.07, 0.045, 0.06]), { ...o, k: 0.035 });
@@ -185,8 +201,6 @@ function hairModel(style) {
     const len = style === 'long' ? 0.135 : 0.075;
     m.add(ellipsoid([0, -0.01, -0.03], [0.092, 0.07 + len * 0.6, 0.094]), { ...o, k: 0.04 });
     m.add(ellipsoid([0.0, 0.062, 0.07], [0.072, 0.032, 0.042]), { ...o, k: 0.03 });
-    back = -0.05 - len;
-    front = 0.052;
   }
   if (style === 'ponytail') {
     m.add(roundCone([0, 0.03, -0.112], [0, -0.13, -0.155], 0.03, 0.012), { ...o, k: 0.02 });
@@ -197,16 +211,12 @@ function hairModel(style) {
   }
   if (style === 'afro') {
     m.add(ellipsoid([0, 0.058, -0.012], [0.118, 0.12, 0.128]), { ...o, k: 0.03 });
-    front = 0.066;
   }
   const faceCut = ellipsoid([0, -0.03, 0.08], [0.064, 0.1, 0.06]);
   const longish = style === 'long' || style === 'bob' || style === 'afro';
-  const clumps = style === 'afro' ? 0.004 : style === 'buzz' ? 0.0006 : 0.0018;
+  const clumps = style === 'afro' ? 0.004 : style === 'buzz' ? 0.0005 : 0.0022;
   m.clip = (x, y, z) => {
-    const line = back + (front - back) * smoothstep(-0.07, 0.085, z);
-    // dip at the temples so the hairline is not a straight cut
-    const temple = 0.012 * smoothstep(0.03, 0.06, Math.abs(x)) * smoothstep(0.0, 0.07, z);
-    let d = line + temple - y;
+    let d = hairlineAt(style, x, z) - y;
     if (!longish) {
       const ear = Math.hypot(Math.abs(x) - 0.075, y - 0.0, z + 0.006) - 0.033;
       d = Math.max(d, -ear);

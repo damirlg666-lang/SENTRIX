@@ -236,6 +236,7 @@ async function main() {
   gfx.setTimeOfDay(game.settings.time);
   game.modelQuality = game.settings.quality;
   window.__game = game;
+  window.__debug = { PROPS, THREE };
 
   await progress('Building the world…', 0.1);
   game.buildWorld((t) => (loadText.textContent = t));

@@ -221,7 +221,7 @@ export class Graphics {
     } else {
       this.gtao = null;
     }
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.32, 0.45, 0.92);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.28, 0.4, 2.4);
     composer.addPass(this.bloom);
     composer.addPass(new OutputPass());
     this.composer = composer;

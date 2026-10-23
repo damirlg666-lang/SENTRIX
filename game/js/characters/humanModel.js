@@ -1,6 +1,6 @@
 // Character templates, per-person painting (layered clothing) and the skinned mesh.
 import * as THREE from 'three';
-import { runJob, L, EYE, HAIR_STYLES } from './modelGen.js';
+import { runJob, L, EYE, HAIR_STYLES, hairlineAt } from './modelGen.js';
 import { B, BONE_COUNT, makeSkeleton, BODY_TYPES } from './skeleton.js';
 import { eyeTexture } from '../engine/textures.js';
 
@@ -317,6 +317,7 @@ export function paintCharacter(tpl, outfit) {
   const mat = new Float32Array(nv * 2);
   const layer = new Float32Array(nv * 4).fill(-1);
   const layer2 = new Float32Array(nv * 2).fill(-1);
+  const cloth = new Float32Array(nv * 2).fill(1);
   const face = new Float32Array(nv * 2).fill(-1);
 
   const skin = new THREE.Color(outfit.skin);
@@ -379,6 +380,11 @@ export function paintCharacter(tpl, outfit) {
         if (Math.abs(ly + 0.0465) < 0.0017 && Math.abs(lx) < 0.021) c.multiplyScalar(0.42);
       }
       const ax = Math.abs(lx);
+      // soften the hairline: skin right under the hair edge picks up some hair colour
+      if (outfit.hairStyle !== 'bald' && lab === L.HEAD) {
+        const below = hairlineAt(outfit.hairStyle, lx, lz) - ly;
+        if (below > -0.02) c.lerp(hair, 0.45 * (1 - smooth(0.0, 0.014, below)));
+      }
       // eyebrows: signed coverage (head units scaled to metres)
       const k = Math.min(1, Math.max(0, (ax - 0.011) / 0.042));
       const arch = 0.033 + 0.0075 * Math.sin(Math.PI * k) - k * 0.002;
@@ -400,35 +406,40 @@ export function paintCharacter(tpl, outfit) {
       const isArmR = bone === B.UARM_R || bone === B.FARM_R || bone === B.HAND_R;
       const isLeg = bone >= B.THIGH_L;
       if (lab === L.FOOT) c.copy(shoe);
-      let sBottom = -1, sTop = -1, sTop2 = -1, sBelt = -1, sSock = -1, sShoe = -1;
+      // Coverage is split into linear fields (hem, neckline, sleeve end...) that the shader
+      // combines per pixel, so hems stay crisp even where they cross mesh triangles.
+      let sBottom = -1, sTopRest = 1, sTop2 = -1, torso = -1, leg = -1, neck = 1, sleeve = 1;
       if (isLeg) {
         sBottom = y - legHem;
-        sSock = 0.2 - y;
-        sShoe = 0.113 - y;
+        sTopRest = -1;
+        leg = 1;
       } else if (isArmL || isArmR) {
         const S = isArmL ? 'L' : 'R';
         const sh = j['shoulder' + S];
         const d = j['armDir' + S];
         const u = (x - sh[0]) * d[0] + (y - sh[1]) * d[1] + (z - sh[2]) * d[2];
-        sTop = sleeveU - u;
-        if (tt === 'hoodie') sTop2 = Math.min(u - (sleeveU - 0.045), sTop);
-        else if (outfit.top.trim && tt === 'tshirt') sTop2 = Math.min(u - (sleeveU - 0.013), sTop);
+        sleeve = sleeveU - u;
       } else {
         sBottom = waistY - y;
-        sTop = Math.min(y - hemY, neckLine(x, z) - y);
-        if (tt === 'tank') sTop = Math.min(sTop, Math.max(strapX - Math.abs(x), armpitY - y));
+        sTopRest = y - hemY;
+        neck = neckLine(x, z) - y;
+        if (tt === 'tank') sTopRest = Math.min(sTopRest, Math.max(strapX - Math.abs(x), armpitY - y));
+        const sTop = Math.min(sTopRest, neck);
         if (tt === 'jacket') sTop2 = Math.min(0.034 - Math.abs(x), z - 0.012, sTop + 0.02);
         else if (tt === 'hoodie') sTop2 = Math.min(sTop, hemY + 0.045 - y);
         else if (tt === 'polo') sTop2 = Math.min(0.012 - Math.abs(x), y - (j.chestC[1] + 0.045), z - 0.03, sTop + 0.01);
-        else if (outfit.top.trim && (tt === 'tshirt' || tt === 'vneck')) sTop2 = Math.min(sTop, y - (neckLine(x, z) - 0.013));
-        if (tucked) sBelt = 0.0115 - Math.abs(y - beltY);
+        if (tucked) torso = 1;
       }
       layer[v * 4] = sBottom;
-      layer[v * 4 + 1] = sTop;
+      layer[v * 4 + 1] = sTopRest;
       layer[v * 4 + 2] = sTop2;
-      layer[v * 4 + 3] = sBelt;
-      layer2[v * 2] = sSock;
-      layer2[v * 2 + 1] = sShoe;
+      layer[v * 4 + 3] = torso;
+      layer2[v * 2] = leg;
+      cloth[v * 2] = neck;
+      cloth[v * 2 + 1] = sleeve;
+      const sTop = Math.min(sTopRest, neck, sleeve);
+      const sBelt = torso > 0 ? 0.0115 - Math.abs(y - beltY) : -1;
+      const sSock = leg > 0 ? 0.2 - y : -1;
       // cloth thickness: cumulative over covering layers, ramped so hems form a soft step
       let bottomThick = bt === 'jeans' ? 0.0042 : 0.0038;
       if (bt === 'skirt' && isLeg) bottomThick += Math.max(0, waistY - 0.1 - y) * 0.06;
@@ -448,7 +459,7 @@ export function paintCharacter(tpl, outfit) {
       pos[v * 3 + 2] += N[v * 3 + 2] * off;
     }
   }
-  return { pos, col, mat, layer, layer2, face };
+  return { pos, col, mat, layer, layer2, cloth, face };
 }
 
 // ------------------------------------------------------------------ material
@@ -483,7 +494,9 @@ attribute vec4 aLayer;
 attribute vec2 aLayer2;
 attribute vec2 aDamage;
 attribute vec2 aFace;
+attribute vec2 aCloth;
 varying vec2 vFace;
+varying vec2 vCloth;
 varying vec2 vMat;
 varying vec4 vLayer;
 varying vec2 vLayer2;
@@ -497,7 +510,10 @@ uniform vec3 uSole;
 uniform float uPale;
 uniform vec3 uHair;
 uniform float uBeard;
+uniform vec2 uTrim;
+uniform float uBeltY;
 varying vec2 vFace;
+varying vec2 vCloth;
 varying vec2 vMat;
 varying vec4 vLayer;
 varying vec2 vLayer2;
@@ -530,14 +546,18 @@ col = mix(col, col * vec3(0.78, 0.8, 0.86) + vec3(0.03, 0.03, 0.05), uPale * ski
 float a;
 a = cover(vFace.x); col = mix(col, uHair * 0.85, a); gMat = mix(gMat, vec2(0.6, 2.0), a);
 a = cover(vFace.y) * uBeard; col = mix(col, uHair * 0.92, a); gMat = mix(gMat, vec2(0.6, 2.0), step(0.5, uBeard) * a);
-a = cover(vLayer2.x); col = mix(col, uLayerColor[0], a); gMat = mix(gMat, uLayerMat[0], a);
-a = cover(vLayer2.y);
+// every coverage value is a min/max of linearly interpolated fields, evaluated per pixel
+float legs = vLayer2.x;
+a = cover(min(legs, 0.2 - vBind.y)); col = mix(col, uLayerColor[0], a); gMat = mix(gMat, uLayerMat[0], a);
+a = cover(min(legs, 0.113 - vBind.y));
 float sole = cover(0.022 - vBind.y);
 col = mix(col, mix(uLayerColor[1], uSole, sole), a); gMat = mix(gMat, mix(uLayerMat[1], vec2(0.85, 1.0), sole), a);
 a = cover(vLayer.x); col = mix(col, uLayerColor[2], a); gMat = mix(gMat, uLayerMat[2], a);
-a = cover(vLayer.y); col = mix(col, uLayerColor[3], a); gMat = mix(gMat, uLayerMat[3], a);
-a = cover(vLayer.z); col = mix(col, uLayerColor[4], a); gMat = mix(gMat, uLayerMat[4], a);
-a = cover(vLayer.w); col = mix(col, uLayerColor[5], a); gMat = mix(gMat, uLayerMat[5], a);
+float top = min(vLayer.y, min(vCloth.x, vCloth.y));
+a = cover(top); col = mix(col, uLayerColor[3], a); gMat = mix(gMat, uLayerMat[3], a);
+float top2 = max(vLayer.z, min(top, max(uTrim.x - vCloth.x, uTrim.y - vCloth.y)));
+a = cover(top2); col = mix(col, uLayerColor[4], a); gMat = mix(gMat, uLayerMat[4], a);
+a = cover(min(vLayer.w, 0.0115 - abs(vBind.y - uBeltY))); col = mix(col, uLayerColor[5], a); gMat = mix(gMat, uLayerMat[5], a);
 float blood = clamp(vDamage.x, 0.0, 1.0);
 float burn = clamp(vDamage.y, 0.0, 1.0);
 col = mix(col, vec3(0.28, 0.015, 0.02), blood * 0.92);
@@ -573,13 +593,27 @@ function patchShader(shader) {
     .replace('#include <common>', VERT_HEAD)
     .replace(
       '#include <begin_vertex>',
-      '#include <begin_vertex>\nvMat = aMat;\nvLayer = aLayer;\nvLayer2 = aLayer2;\nvDamage = aDamage;\nvFace = aFace;\nvBind = position;'
+      '#include <begin_vertex>\nvMat = aMat;\nvLayer = aLayer;\nvLayer2 = aLayer2;\nvDamage = aDamage;\nvFace = aFace;\nvCloth = aCloth;\nvBind = position;'
     );
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <common>', FRAG_HEAD)
     .replace('#include <color_fragment>', FRAG_COLOR)
     .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = roughness * gMat.x;')
     .replace('#include <normal_fragment_maps>', FRAG_DETAIL);
+}
+
+function trimWidths(outfit) {
+  const tt = outfit.top.type;
+  if (tt === 'hoodie') return new THREE.Vector2(-1, 0.045);
+  if (outfit.top.trim && tt === 'tshirt') return new THREE.Vector2(0.013, 0.013);
+  if (outfit.top.trim && tt === 'vneck') return new THREE.Vector2(0.013, -1);
+  return new THREE.Vector2(-1, -1);
+}
+
+function beltHeight(outfit) {
+  // must match paintCharacter: belts sit just under the waistline of tucked tops
+  const sk = makeSkeleton(outfit.bodyType || 'male');
+  return sk.j.waist[1] + 0.008 - 0.012;
 }
 
 /** Per-person material (the compiled program is shared; uniforms are per instance). */
@@ -593,12 +627,14 @@ export function makeCharacterMaterial(outfit) {
     uPale: { value: 0 },
     uHair: { value: new THREE.Color(outfit.hair) },
     uBeard: { value: outfit.beard === 'stubble' ? 0.3 : outfit.beard === 'none' ? 0 : 1 },
+    uTrim: { value: trimWidths(outfit) },
+    uBeltY: { value: beltHeight(outfit) },
   };
   m.onBeforeCompile = function (shader) {
     Object.assign(shader.uniforms, this.userData.uniforms);
     patchShader(shader);
   };
-  m.customProgramCacheKey = () => 'ragdoll-character-v3';
+  m.customProgramCacheKey = () => 'ragdoll-character-v4';
   return m;
 }
 
@@ -634,6 +670,7 @@ function lidGeometry(skinHex) {
   g.setAttribute('aLayer2', new THREE.BufferAttribute(new Float32Array(n * 2).fill(-1), 2));
   g.setAttribute('aDamage', new THREE.BufferAttribute(new Float32Array(n * 2), 2));
   g.setAttribute('aFace', new THREE.BufferAttribute(new Float32Array(n * 2).fill(-1), 2));
+  g.setAttribute('aCloth', new THREE.BufferAttribute(new Float32Array(n * 2).fill(1), 2));
   g.setIndex(lidGeo.index);
   return g;
 }
@@ -654,6 +691,7 @@ export function createCharacterMesh(type, outfit, quality = 'high') {
   geo.setAttribute('aLayer', new THREE.BufferAttribute(painted.layer, 4));
   geo.setAttribute('aLayer2', new THREE.BufferAttribute(painted.layer2, 2));
   geo.setAttribute('aFace', new THREE.BufferAttribute(painted.face, 2));
+  geo.setAttribute('aCloth', new THREE.BufferAttribute(painted.cloth, 2));
   const damage = new THREE.BufferAttribute(new Float32Array(tpl.vertexCount * 2), 2);
   damage.setUsage(THREE.DynamicDrawUsage);
   geo.setAttribute('aDamage', damage);
@@ -662,7 +700,7 @@ export function createCharacterMesh(type, outfit, quality = 'high') {
   geo.setIndex(tpl.indexAttr);
   geo.computeBoundingSphere();
 
-  const material = makeCharacterMaterial(outfit);
+  const material = makeCharacterMaterial({ ...outfit, bodyType: type });
   const root = new THREE.Group();
   const bones = [];
   const inverses = [];

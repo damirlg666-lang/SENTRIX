@@ -185,6 +185,7 @@ export class Person extends Entity {
   }
 
   statusText() {
+    if (this.held && this.conscious) return 'Panicking!';
     switch (this.state) {
       case ST.DEAD:
         return 'Dead';

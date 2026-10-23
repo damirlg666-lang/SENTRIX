@@ -329,7 +329,7 @@ export class Effects {
     this.drops = []; // blood droplets that leave decals where they land
     this.pools = []; // growing blood pools under bleeding bodies
     this.rings = [];
-    this.ringGeo = new THREE.RingGeometry(0.8, 1, 48).rotateX(-Math.PI / 2);
+    this.ringGeo = new THREE.RingGeometry(0.9, 1, 64).rotateX(-Math.PI / 2);
   }
 
   setPixelScale(h) {
@@ -357,7 +357,7 @@ export class Effects {
       }
       const s = r.r0 + (r.r1 - r.r0) * (1 - Math.pow(1 - k, 3));
       r.mesh.scale.set(s, 1, s);
-      r.mesh.material.opacity = (1 - k) * 0.55;
+      r.mesh.material.opacity = (1 - k) * 0.3;
     }
   }
 
@@ -567,17 +567,18 @@ export class Effects {
   explosion(p, power = 1) {
     const s = Math.sqrt(power);
     // fireball
-    for (let i = 0; i < 26 * s; i++) {
-      const d = new THREE.Vector3(rnd(-1, 1), rnd(-0.3, 1), rnd(-1, 1)).normalize();
-      const sp = rnd(2, 9) * s;
+    for (let i = 0; i < 18 * s; i++) {
+      const d = new THREE.Vector3(rnd(-1, 1), rnd(-0.2, 1), rnd(-1, 1)).normalize();
+      const sp = rnd(2, 10) * s;
+      const hot = Math.random();
       this.additive.add({
         x: p.x + d.x * 0.2, y: p.y + d.y * 0.2 + 0.1, z: p.z + d.z * 0.2, vx: d.x * sp, vy: d.y * sp + 1, vz: d.z * sp,
-        drag: 5, grav: -2, life: rnd(0.3, 0.8), size0: rnd(0.5, 1.1) * s, size1: rnd(1.6, 2.6) * s,
-        col0: [1.9, 1.05, 0.38], col1: [0.9, 0.22, 0.04], a0: 0.85, tile: TILE.FIRE + Math.floor(Math.random() * 4), fadePow: 1.3,
+        drag: 5, grav: -2.5, life: rnd(0.25, 0.65), size0: rnd(0.35, 0.8) * s, size1: rnd(1.1, 1.9) * s,
+        col0: [1.6, 0.55 + hot * 0.35, 0.12 + hot * 0.1], col1: [0.55, 0.08, 0.01], a0: 0.6, tile: TILE.FIRE + Math.floor(Math.random() * 4), fadePow: 1.2,
       });
     }
     // core flash
-    this.additive.add({ x: p.x, y: p.y + 0.3, z: p.z, vx: 0, vy: 0, vz: 0, life: 0.14, size0: 3.5 * s, size1: 5 * s, col0: [1.6, 1.1, 0.6], tile: TILE.GLOW });
+    this.additive.add({ x: p.x, y: p.y + 0.3, z: p.z, vx: 0, vy: 0, vz: 0, life: 0.1, size0: 2.6 * s, size1: 3.6 * s, col0: [1.4, 0.9, 0.45], a0: 0.8, tile: TILE.GLOW });
     // smoke column
     for (let i = 0; i < 22 * s; i++) {
       const d = new THREE.Vector3(rnd(-1, 1), rnd(0, 1), rnd(-1, 1)).normalize();
@@ -600,7 +601,7 @@ export class Effects {
     const ring = new THREE.Mesh(this.ringGeo, new THREE.MeshBasicMaterial({ color: 0xffe2b0, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
     ring.position.set(p.x, p.y + 0.05, p.z);
     this.game.scene.add(ring);
-    this.rings.push({ mesh: ring, t: 0, life: 0.45, r0: 0.3, r1: 7 * s });
+    this.rings.push({ mesh: ring, t: 0, life: 0.35, r0: 0.3, r1: 6 * s });
     // scorch
     const hit = this.game.physics.raycast({ x: p.x, y: p.y + 0.5, z: p.z }, { x: 0, y: -1, z: 0 }, 2.5, null, GROUPS.queryStatic);
     if (hit && hit.owner?.entity?.kind === 'static') this.scorch.add(hit.point, hit.normal, rnd(2.8, 3.8) * s);
