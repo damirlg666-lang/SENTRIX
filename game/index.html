@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#0d1117">
+  <title>Ragdoll Sandbox</title>
+  <meta name="description" content="A 3D physics sandbox with active ragdoll people, weapons, explosives and props. Runs in the browser.">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/three.module.js",
+        "three/addons/": "./vendor/three/addons/",
+        "rapier": "./vendor/rapier/rapier.mjs"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="view" tabindex="0"></canvas>
+
+  <!-- Loading screen -->
+  <div id="loading">
+    <div class="load-card">
+      <div class="logo"><span class="logo-mark"></span><span>RAGDOLL</span><b>SANDBOX</b></div>
+      <div class="load-bar"><div id="load-fill"></div></div>
+      <div id="load-text">Starting engine…</div>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <header id="topbar">
+      <div class="logo small"><span class="logo-mark"></span><span>RAGDOLL</span><b>SANDBOX</b></div>
+      <div id="stats">
+        <span title="People alive"><i class="dot alive"></i><b id="stat-alive">0</b></span>
+        <span title="People down"><i class="dot dead"></i><b id="stat-dead">0</b></span>
+        <span title="Objects"><i class="dot obj"></i><b id="stat-objects">0</b></span>
+        <span id="stat-fps" class="muted"></span>
+      </div>
+      <div class="top-actions">
+        <button class="icon-btn" id="btn-undo" title="Undo last spawn (Ctrl+Z)"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
+        <button class="icon-btn" id="btn-slowmo" title="Slow motion (T)"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M10 2h4"/></svg></button>
+        <button class="icon-btn" id="btn-pause" title="Pause physics (P)"><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></button>
+        <button class="icon-btn danger" id="btn-clear" title="Clear everything"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+        <button class="icon-btn" id="btn-settings" title="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+        <button class="icon-btn" id="btn-help" title="Controls (H)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.01"/></svg></button>
+      </div>
+    </header>
+
+    <!-- Spawn catalog -->
+    <aside id="catalog" class="panel">
+      <div class="panel-head">
+        <h2>Spawn</h2>
+        <button class="icon-btn small" id="btn-catalog-toggle" title="Toggle spawn menu (Tab)"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+      </div>
+      <nav id="cat-tabs"></nav>
+      <div id="cat-items"></div>
+    </aside>
+    <button id="catalog-open" class="pill hidden" title="Open spawn menu (Tab)"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Spawn</button>
+
+    <!-- Tool bar -->
+    <div id="toolbar-wrap">
+      <div id="weapon-bar" class="hidden"></div>
+      <div id="toolbar"></div>
+    </div>
+
+    <div id="hint"></div>
+    <div id="toast"></div>
+    <div id="hover-tip" class="hidden"><div class="ht-name"></div><div class="ht-bar"><i></i></div><div class="ht-state"></div></div>
+    <div id="crosshair" class="hidden"></div>
+    <div id="slowmo-badge" class="hidden">SLOW MOTION</div>
+    <div id="paused-badge" class="hidden">PAUSED</div>
+
+    <!-- Settings -->
+    <div id="settings" class="modal hidden">
+      <div class="modal-card">
+        <div class="panel-head"><h2>Settings</h2><button class="icon-btn small close" data-close="settings"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+        <div class="setting"><label>Graphics quality</label><div class="seg" id="set-quality"><button data-v="low">Low</button><button data-v="medium">Medium</button><button data-v="high">High</button></div></div>
+        <div class="setting"><label>Time of day</label><div class="seg" id="set-time"><button data-v="day">Day</button><button data-v="golden">Golden hour</button><button data-v="overcast">Overcast</button></div></div>
+        <div class="setting"><label>Gravity <span id="grav-val"></span></label><input type="range" id="set-gravity" min="0" max="2" step="0.05" value="1"></div>
+        <div class="setting"><label>Slow motion speed <span id="slow-val"></span></label><input type="range" id="set-slow" min="0.05" max="0.6" step="0.05" value="0.25"></div>
+        <div class="setting"><label>Volume <span id="vol-val"></span></label><input type="range" id="set-volume" min="0" max="1" step="0.05" value="0.7"></div>
+        <div class="setting row"><label for="set-blood">Blood &amp; wounds</label><input type="checkbox" id="set-blood" class="toggle" checked></div>
+        <div class="setting row"><label for="set-ai">People walk around</label><input type="checkbox" id="set-ai" class="toggle" checked></div>
+        <div class="setting row"><label for="set-fps">Show FPS</label><input type="checkbox" id="set-fps" class="toggle"></div>
+      </div>
+    </div>
+
+    <!-- Help -->
+    <div id="help" class="modal hidden">
+      <div class="modal-card wide">
+        <div class="panel-head"><h2>Controls</h2><button class="icon-btn small close" data-close="help"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+        <div class="help-grid">
+          <div>
+            <h3>Camera</h3>
+            <p><kbd>Right mouse</kbd> drag to look around</p>
+            <p><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move &nbsp;<kbd>Q</kbd><kbd>E</kbd> down / up</p>
+            <p><kbd>Shift</kbd> move faster &nbsp;<kbd>Wheel</kbd> zoom</p>
+            <p><kbd>Middle mouse</kbd> drag to pan &nbsp;<kbd>F</kbd> focus on target</p>
+            <h3>Touch</h3>
+            <p>One finger uses the tool, two fingers orbit, pinch to zoom.</p>
+          </div>
+          <div>
+            <h3>Tools</h3>
+            <p><kbd>1</kbd>–<kbd>9</kbd> select tool &nbsp;<kbd>Tab</kbd> spawn menu</p>
+            <p><b>Hand</b>: drag anything. <kbd>Wheel</kbd> pull/push, <kbd>F</kbd> freeze in place while holding.</p>
+            <p><b>Weapons</b>: <kbd>Left mouse</kbd> fire, <kbd>R</kbd> next weapon.</p>
+            <p><b>Rope</b>: click two points to tie them together.</p>
+            <p><kbd>P</kbd> pause &nbsp;<kbd>T</kbd> slow motion &nbsp;<kbd>Ctrl</kbd>+<kbd>Z</kbd> undo spawn</p>
+            <p><kbd>Esc</kbd> cancel / close menus &nbsp;<kbd>H</kbd> this help</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="fatal" class="hidden"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
