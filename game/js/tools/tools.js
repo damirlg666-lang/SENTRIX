@@ -493,7 +493,7 @@ export class Tools {
       const exitHit = game.physics.raycast(farStart, back, 0.6, (c) => c.handle === e.ragdoll.colliders[part].handle);
       if (exitHit && (pierce > 0 || w.damage > 25) && !e.dummy) {
         game.fx?.bloodBurst(exitHit.point, dir, 1.1);
-        e.wound(part, exitHit.point, 1.3);
+        e.wound(part, exitHit.point, 1.3, back);
       }
       if (pierce > 0) {
         const ex = exclude ? new Set([...exclude, ...handles]) : handles;

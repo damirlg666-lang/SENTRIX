@@ -12,6 +12,7 @@ import {
 } from './injury.js';
 import { initChem, updateChem, chemBoost, chemStatus, clearChem } from './chem.js';
 import { initReactions, react, applyReactions, staggerVelocity, onDeath } from './reactions.js';
+import { addWoundHole, popEye, breakJaw, headLocal, updateSoft, healSoft } from '../characters/softbones.js';
 
 export const ST = {
   ACTIVE: 'active',
@@ -859,10 +860,12 @@ export class Person extends Entity {
     if (this.ch && info.kind === 'explosion' && info.point) {
       paintDamage(this.ch, part, info.point, 0.25, Math.min(1, dmg / 40), 1);
     }
-    // the hole itself: a small dark centre in the wound (also on dummies)
+    // the hole itself: a dark patch in the skin plus a sharp hole decal on the surface
     if (this.ch && info.point && (info.kind === 'bullet' || info.kind === 'cut')) {
       paintDamage(this.ch, part, info.point, info.kind === 'cut' ? 0.011 : 0.0075 + Math.min(0.006, dmg * 0.00015), 1, 1);
+      if (info.dir) addWoundHole(this, part, info.point, info.dir, info.kind === 'cut' ? 0.03 : 0.016 + Math.min(0.012, dmg * 0.00025), info.kind === 'cut');
     }
+    if (part === B.HEAD && this.ch && info.point) this.headTrauma(info, dmg);
     if ((info.kind === 'bullet' || info.kind === 'cut') && part === B.CHEST && info.point && !this.dummy) this.organHit(info.point);
     if (info.kind === 'bullet' && info.dir) bulletTrauma(this, part, info.amount, info.dir);
   }
@@ -958,13 +961,30 @@ export class Person extends Entity {
   }
 
   /** Paint a bullet wound without dealing damage (used for exit wounds). */
-  wound(part, point, scale = 1) {
+  wound(part, point, scale = 1, dir = null) {
     if (!this.ch) return;
     paintDamage(this.ch, part, point, 0.009 * scale, 1, 1);
+    if (dir) addWoundHole(this, part, point, dir, 0.02 * scale);
     if (this.dummy || this.game.settings?.blood === false) return;
     paintDamage(this.ch, part, point, 0.026 * scale, 1, 0);
     paintDamage(this.ch, part, point, 0.07 * scale, 0.3, 0);
     this.addWound(part, point);
+  }
+
+  /** Hits to the face can knock an eye out or break the jaw. */
+  headTrauma(info, dmg) {
+    const l = headLocal(this, info.point);
+    const eyeSide = l.x < 0 ? 0 : 1;
+    if (info.kind === 'bullet' || info.kind === 'cut') {
+      if (l.z > 0.03 && l.y > -0.025 && l.y < 0.05 && Math.random() < 0.6) popEye(this, eyeSide);
+      if (l.y < -0.03 && l.z > -0.01 && Math.random() < 0.6) breakJaw(this);
+    } else if (info.kind === 'blunt' && dmg > 12) {
+      if (Math.random() < 0.3) breakJaw(this);
+      if (Math.random() < 0.15) popEye(this, eyeSide);
+    } else if (info.kind === 'explosion' && dmg > 20) {
+      if (Math.random() < 0.4) popEye(this);
+      if (Math.random() < 0.4) breakJaw(this);
+    }
   }
 
   /** A shot or stab in the chest: the heart stops within seconds, a lung makes them cough blood. */
@@ -1024,6 +1044,7 @@ export class Person extends Entity {
     this.wounds.length = 0;
     this.lungHit = false;
     this.heartTimer = null;
+    healSoft(this);
     if (this.ch) {
       clearDamage(this.ch);
       this.ch.material.userData.uniforms.uPale.value = 0;
@@ -1044,6 +1065,7 @@ export class Person extends Entity {
   update(dt) {
     if (!this.ch) return;
     this.syncBones();
+    updateSoft(this, dt);
     this.updateBleeding(dt);
     if (!this.dummy) updateSpurts(this, dt);
     for (const g of this.guts) g.update();
@@ -1100,6 +1122,7 @@ export class Person extends Entity {
     for (const g of this.guts) g.destroy();
     this.ragdoll.destroy();
     for (const m of this.ch?.organs ?? []) m.geometry.dispose();
+    this.ch?.skeleton.dispose();
     if (this.ch) {
       this.game.scene.remove(this.ch.root);
       // template buffers are shared between people: detach them so dispose() only frees ours

@@ -577,6 +577,49 @@ export function bulletHole() {
   });
 }
 
+/** A gunshot or stab hole in skin or cloth: black centre, raw red rim, ragged blood edge. */
+export function woundHole() {
+  return memo('woundHole', () => {
+    const S = 64;
+    const d = new Uint8Array(S * S * 4);
+    const rnd = mulberry32(17);
+    const jag = Array.from({ length: 24 }, () => 0.75 + rnd() * 0.5);
+    for (let y = 0; y < S; y++) {
+      for (let x = 0; x < S; x++) {
+        const u = (x + 0.5) / S - 0.5;
+        const v = (y + 0.5) / S - 0.5;
+        const a = (Math.atan2(v, u) / (Math.PI * 2) + 0.5) * jag.length;
+        const i0 = Math.floor(a) % jag.length;
+        const f = a - Math.floor(a);
+        const ragged = jag[i0] * (1 - f) + jag[(i0 + 1) % jag.length] * f;
+        const r = Math.hypot(u, v) / ragged;
+        let col;
+        let alpha;
+        if (r < 0.13) {
+          col = [6, 1, 1];
+          alpha = 1;
+        } else if (r < 0.25) {
+          const t = (r - 0.13) / 0.12;
+          col = [6 + 70 * t, 1 + 4 * t, 2 + 4 * t];
+          alpha = 1;
+        } else {
+          const t = smoothstep(0.25, 0.5, r);
+          col = [76 - 20 * t, 5, 6];
+          alpha = 1 - t;
+        }
+        const k = (y * S + x) * 4;
+        d[k] = col[0];
+        d[k + 1] = col[1];
+        d[k + 2] = col[2];
+        d[k + 3] = clamp(alpha, 0, 1) * 255;
+      }
+    }
+    const t = dataTexture(d, S, true);
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    return t;
+  });
+}
+
 /** Iris texture for eyeballs: vertical gradient that maps to latitude on a sphere. */
 export function eyeTexture(irisColor) {
   return memo('eye' + irisColor, () => {

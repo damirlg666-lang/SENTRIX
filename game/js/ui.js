@@ -502,7 +502,7 @@ export class UI {
     if (e.kind === 'person') {
       frac = Math.max(0, Math.min(e.health, e.blood) / 100);
       state = e.statusText();
-      if (e.alive && e.bleed > 0.4) state += ' · bleeding';
+      if (e.alive && e.bleed > 0.4 && !state.startsWith('Bleeding')) state += ' · bleeding';
       if (e.state === ST.DEAD) frac = 0;
     } else if (isFinite(e.maxHealth)) {
       frac = Math.max(0, e.health / e.maxHealth);

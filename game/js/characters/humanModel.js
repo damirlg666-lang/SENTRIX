@@ -5,6 +5,7 @@ import { B, BONE_COUNT, makeSkeleton, BODY_TYPES } from './skeleton.js';
 import { eyeTexture } from '../engine/textures.js';
 
 export { L, EYE, HAIR_STYLES };
+export { PIECE };
 
 // material detail channel
 const D = { SKIN: 0, FABRIC: 1, HAIR: 2, DENIM: 3, LEATHER: 4 };

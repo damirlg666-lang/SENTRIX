@@ -75,17 +75,24 @@ const _a = new THREE.Vector3();
  * the cut are dropped. Returns the bind-space centre and radius of the opening on each side
  * (radius measured perpendicular to `axis`), or null for a side without an opening.
  */
+/** The template's skinning and index buffers are shared between people: copy before editing. */
+export function ensureOwnSkin(ch) {
+  if (ch.ownSkin) return;
+  const tpl = ch.template;
+  const geo = ch.geometry;
+  geo.setAttribute('skinIndex', new THREE.BufferAttribute(tpl.skinIndexAttr.array.slice(), 4));
+  geo.setAttribute('skinWeight', new THREE.BufferAttribute(tpl.skinWeightAttr.array.slice(), 4));
+  geo.setIndex(new THREE.BufferAttribute(tpl.indexAttr.array.slice(), 1));
+  geo.setDrawRange(0, tpl.indexAttr.count);
+  ch.ownSkin = true;
+}
+
 export function splitMesh(ch, mask, axis) {
   const tpl = ch.template;
   const geo = ch.geometry;
-  if (!ch.ownSkin) {
-    // the template's skinning and index buffers are shared between people: copy before editing
-    geo.setAttribute('skinIndex', new THREE.BufferAttribute(tpl.skinIndexAttr.array.slice(), 4));
-    geo.setAttribute('skinWeight', new THREE.BufferAttribute(tpl.skinWeightAttr.array.slice(), 4));
-    geo.setIndex(new THREE.BufferAttribute(tpl.indexAttr.array.slice(), 1));
-    geo.setDrawRange(0, tpl.indexAttr.count);
-    ch.ownSkin = true;
-  }
+  ensureOwnSkin(ch);
+  // extra skin bones (jaw, fractures) belong to the side of the bone they hang off
+  const inSub = (b) => (b < BONE_COUNT ? mask[b] : mask[ch.extra[b - BONE_COUNT].parent]) ? 1 : 0;
   const si = geo.attributes.skinIndex.array;
   const sw = geo.attributes.skinWeight.array;
   const pos = geo.attributes.position.array;
@@ -93,12 +100,12 @@ export function splitMesh(ch, mask, axis) {
   const side = new Uint8Array(n);
   for (let v = 0; v < n; v++) {
     let w = 0;
-    for (let k = 0; k < 4; k++) if (mask[si[v * 4 + k]]) w += sw[v * 4 + k];
+    for (let k = 0; k < 4; k++) if (inSub(si[v * 4 + k])) w += sw[v * 4 + k];
     const s = w > 0.5 ? 1 : 0;
     side[v] = s;
     let tot = 0;
     for (let k = 0; k < 4; k++) {
-      if (mask[si[v * 4 + k]] !== s) sw[v * 4 + k] = 0;
+      if (inSub(si[v * 4 + k]) !== s) sw[v * 4 + k] = 0;
       tot += sw[v * 4 + k];
     }
     if (tot > 0) for (let k = 0; k < 4; k++) sw[v * 4 + k] /= tot;

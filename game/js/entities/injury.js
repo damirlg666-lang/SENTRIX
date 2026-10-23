@@ -6,6 +6,7 @@ import { splitMesh, makeCap, subtreeMask, addOrgans, vertebraStub } from '../cha
 import { paintBind, paintDamage } from '../characters/humanModel.js';
 import { GutStrand } from './guts.js';
 import { GIBS } from '../catalog/gibs.js';
+import { addFracture, popEye, breakJaw } from '../characters/softbones.js';
 
 export const CHAINS = [
   [B.UARM_L, B.FARM_L, B.HAND_L],
@@ -133,6 +134,8 @@ export function breakBone(p, bone) {
   p.broken[bone] = 1;
   p.ragdoll.setLoose(bone, true);
   applyTone(p);
+  // limb bones snap in the middle: the limb kinks there and wobbles
+  addFracture(p, bone);
   const t = p.ragdoll.bodies[bone].translation();
   p.game.audio?.crack(t);
   if (bone === B.HEAD) {
@@ -326,6 +329,10 @@ export function blastTrauma(p, center, power, radius) {
   if (p.attached[B.HEAD]) {
     const s = strength(B.HEAD);
     if (s > 2 && Math.random() < 0.35) sever(p, B.HEAD, { impulse: new THREE.Vector3(0, 6, 0) });
+    else if (s > 0.7) {
+      if (Math.random() < 0.35) popEye(p);
+      if (Math.random() < 0.35) breakJaw(p);
+    }
   }
 }
 
