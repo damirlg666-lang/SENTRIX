@@ -32,7 +32,7 @@ Needs a browser with WebGL 2 (current Chrome, Edge, Firefox or Safari).
 | Zoom | Mouse wheel | Pinch |
 | Pan | Middle mouse drag | — |
 | Focus on what is under the cursor | `F` | — |
-| Select tool | `1`–`8` or the toolbar | Toolbar |
+| Select tool | `1`–`9` or the toolbar | Toolbar |
 | Spawn menu | `Tab` or the **Spawn** button | **Spawn** button |
 | Activate (arm TNT, start a car) | `G` while hovering it | — |
 | Delete what is under the cursor | `Delete` | Delete tool |
@@ -51,6 +51,8 @@ Needs a browser with WebGL 2 (current Chrome, Edge, Firefox or Safari).
 - **Freeze** – freezes objects, or pins the body part of a person you click.
 - **Heal** – heals and revives people, repairs objects.
 - **Delete** – removes things.
+- **Control** – take over a person: `WASD` walks relative to the camera, `Shift` runs,
+  `Space` jumps and clicking throws punches. `Esc` lets go.
 
 ## Settings
 

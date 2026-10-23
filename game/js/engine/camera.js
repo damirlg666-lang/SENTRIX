@@ -22,6 +22,7 @@ export class CameraController {
     this._fwd = new THREE.Vector3();
     this._right = new THREE.Vector3();
     this.follow = null; // optional function returning a Vector3 to track
+    this.moveLock = false; // keyboard drives something else (controlled person)
   }
 
   rotate(dx, dy) {
@@ -51,7 +52,7 @@ export class CameraController {
   }
 
   update(dt) {
-    if (this.enabled) {
+    if (this.enabled && !this.moveLock) {
       const k = this.keys;
       const fast = k.has('ShiftLeft') || k.has('ShiftRight');
       const speed = (this.dist * 0.9 + 5) * (fast ? 2.6 : 1);

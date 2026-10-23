@@ -22,6 +22,11 @@ const TUNE = { fp: 0.9, gp: 40, fs: 0.8, fc: 0.9, gs: 40 };
 // velocity change (m/s) a body part tolerates before taking impact damage
 const IMPACT_LIMIT = [5.5, 5.5, 5.5, 5, 7, 8, 9.5, 7, 8, 9.5, 6.5, 8, 10, 6.5, 8, 10];
 
+const PUNCH_BOOST = {
+  [B.HAND_R]: { [B.UARM_R]: 3.5, [B.FARM_R]: 3, [B.CHEST]: 1.5 },
+  [B.HAND_L]: { [B.UARM_L]: 3.5, [B.FARM_L]: 3, [B.CHEST]: 1.5 },
+};
+
 const PART_MULT = [1.0, 1.0, 1.25, 3.2, 0.45, 0.4, 0.25, 0.45, 0.4, 0.25, 0.6, 0.5, 0.3, 0.6, 0.5, 0.3];
 const FIRST_NAMES = ['Alex', 'Sam', 'Jordan', 'Taylor', 'Casey', 'Riley', 'Morgan', 'Jamie', 'Quinn', 'Avery', 'Drew', 'Robin', 'Kai', 'Noa', 'Mika', 'Sasha', 'Rene', 'Toni', 'Charlie', 'Dana'];
 
@@ -172,6 +177,10 @@ export class Person extends Entity {
     this.voiceCooldown = 0;
     this.prevVel = new Float32Array(BONE_COUNT * 3);
     this.wounds = [];
+    this.controlled = false;
+    this.controlInput = { x: 0, z: 0, run: false };
+    this.jumpTime = 0;
+    this.punchTime = 0;
     this.comVel = new Float32Array(3);
     this.jolt = 0;
     this.joltPeak = 0;
@@ -186,6 +195,7 @@ export class Person extends Entity {
   }
 
   statusText() {
+    if (this.controlled && this.alive) return 'Controlled by you';
     if (this.held && this.conscious) return 'Panicking!';
     switch (this.state) {
       case ST.DEAD:
@@ -272,7 +282,8 @@ export class Person extends Entity {
         const v = pel.linvel();
         const slip = Math.hypot(v.x - Math.sin(this.heading) * this.desiredSpeed, v.z - Math.cos(this.heading) * this.desiredSpeed);
         this.slip = slip > 2.0 && this.stateTime > 0.6 ? (this.slip || 0) + dt : 0;
-        if (tilt > 0.85 || this.height < this.standH * 0.62 || this.stun > 0.6 || (this.airTime > 0.35 && !this.held) || this.slip > 0.1) {
+        const airLimit = this.jumpTime > 0 ? 1.4 : 0.35;
+        if (tilt > 0.85 || (this.height < this.standH * 0.62 && this.jumpTime <= 0) || this.stun > 0.6 || (this.airTime > airLimit && !this.held) || this.slip > 0.1) {
           this.fall();
         }
         break;
@@ -306,6 +317,11 @@ export class Person extends Entity {
 
     if (this.state === ST.ACTIVE && !this.held) this.think(dt);
     else this.desiredSpeed = 0;
+    if (this.jumpTime > 0) this.jumpTime -= dt;
+    if (this.punchTime > 0) {
+      this.punchTime -= dt;
+      if (this.punchTime > 0.08) this.punchContacts();
+    }
 
     // muscle tone by state
     let strength = 1;
@@ -313,7 +329,7 @@ export class Person extends Entity {
     const p = this.pose;
     switch (this.state) {
       case ST.ACTIVE:
-        if (this.held || !this.grounded) {
+        if (this.held || (!this.grounded && this.jumpTime <= 0)) {
           this.flailPose(p);
           strength = 0.75;
         } else {
@@ -359,8 +375,9 @@ export class Person extends Entity {
     }
     this.strength += (strength - this.strength) * Math.min(1, dt * 6);
     this.support = support;
-    if (!sleeping || this.state !== ST.DEAD) rd.drive(p, this.strength);
+    if (!sleeping || this.state !== ST.DEAD) rd.drive(p, this.strength, this.punchTime > 0 ? PUNCH_BOOST[this.punchSide] : null);
 
+    if (this.jumpTime > 0.55) support = 0; // let the take-off happen
     if (support > 0 && this.grounded && !this.held) this.balance(dt, support);
   }
 
@@ -503,6 +520,18 @@ export class Person extends Entity {
     p[B.SPINE][0] = 0.02 + run * 0.12;
     // idle sway / breathing
     p[B.CHEST][0] += Math.sin((this.time + this.animT) * 1.6) * 0.015;
+    if (this.punchTime > 0) {
+      // extend the punching arm straight forward, then pull back
+      const k = this.punchTime > 0.14 ? 1 : this.punchTime / 0.14;
+      const right = this.punchSide === B.HAND_R;
+      const ua = right ? B.UARM_R : B.UARM_L;
+      const fa = right ? B.FARM_R : B.FARM_L;
+      p[ua][0] = -1.45 * k + p[ua][0] * (1 - k);
+      p[ua][2] = (right ? 0.62 : -0.62) * k + p[ua][2] * (1 - k);
+      p[fa][0] = 0.12 * k + p[fa][0] * (1 - k);
+      p[B.CHEST][1] = (right ? 0.35 : -0.35) * k;
+      p[B.SPINE][1] = (right ? 0.15 : -0.15) * k;
+    }
     if (this.pain > 0.4) {
       p[B.SPINE][0] += 0.2 * this.pain;
       p[B.HEAD][0] += 0.2 * this.pain;
@@ -534,6 +563,10 @@ export class Person extends Entity {
     const pv = pel.linvel();
     this.speed = Math.hypot(pv.x, pv.z);
     this.fear = Math.max(0, this.fear - dt * 0.12);
+    if (this.controlled) {
+      this.controlThink(dt);
+      return;
+    }
 
     let desired = 0;
     if (this.fear > 0.3 && this.canStand()) {
@@ -551,12 +584,14 @@ export class Person extends Entity {
           const r = 3 + Math.random() * 16;
           this.target = new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r);
           this.walkSpeed = 1.0 + Math.random() * 0.5;
+          this.targetTime = 0;
         }
       } else {
         const dx = this.target.x - pt.x;
         const dz = this.target.z - pt.z;
         const d = Math.hypot(dx, dz);
-        if (d < 0.8 || this.stateTime > 40) {
+        this.targetTime = (this.targetTime ?? 0) + dt;
+        if (d < 0.8 || this.targetTime > 40) {
           this.target = null;
           this.idleTimer = 2 + Math.random() * 6;
         } else {
@@ -584,6 +619,73 @@ export class Person extends Entity {
     }
     this.lookYaw += ((this.lookYawGoal ?? 0) - this.lookYaw) * Math.min(1, dt * 3);
     this.lookPitch += ((this.lookPitchGoal ?? 0) - this.lookPitch) * Math.min(1, dt * 3);
+  }
+
+  /** Player control: input is a world-space direction set by the Control tool. */
+  controlThink(dt) {
+    const inp = this.controlInput || { x: 0, z: 0, run: false };
+    const len = Math.hypot(inp.x, inp.z);
+    let desired = 0;
+    if (len > 0.1) {
+      this.heading = Math.atan2(inp.x, inp.z);
+      desired = inp.run ? 3.7 : 1.7;
+    }
+    if (this.pain > 0.5) desired *= 0.7;
+    this.desiredSpeed += (desired - this.desiredSpeed) * Math.min(1, dt * 6);
+    this.yaw = turnToward(this.yaw, this.heading, dt * 9);
+    this.lookYaw += (0 - this.lookYaw) * Math.min(1, dt * 5);
+    this.lookPitch += (0 - this.lookPitch) * Math.min(1, dt * 5);
+  }
+
+  jump() {
+    if (this.state !== ST.ACTIVE || !this.grounded || this.jumpTime > 0) return false;
+    const fwd = this.desiredSpeed;
+    const fx = Math.sin(this.heading) * fwd * 0.4;
+    const fz = Math.cos(this.heading) * fwd * 0.4;
+    this.ragdoll.bodies.forEach((b, i) => {
+      const m = this.ragdoll.masses[i];
+      b.applyImpulse({ x: fx * m, y: 3.2 * m, z: fz * m }, true);
+    });
+    this.jumpTime = 0.9;
+    return true;
+  }
+
+  punch() {
+    if (this.state !== ST.ACTIVE || this.punchTime > 0) return false;
+    this.punchSide = this.punchSide === B.HAND_R ? B.HAND_L : B.HAND_R;
+    this.punchTime = 0.34;
+    this.punchHits = new Set();
+    const hand = this.ragdoll.bodies[this.punchSide];
+    const dx = Math.sin(this.yaw), dz = Math.cos(this.yaw);
+    hand.applyImpulse({ x: dx * 5.5, y: 0.8, z: dz * 5.5 }, true);
+    this.game.audio?.whoosh(hand.translation(), 0.35);
+    return true;
+  }
+
+  /** While a punch is in flight, anything the fist touches gets hit once. */
+  punchContacts() {
+    const col = this.ragdoll.colliders[this.punchSide];
+    const world = this.game.physics.world;
+    world.contactPairsWith(col, (other) => {
+      const o = this.game.physics.ownerOf(other.handle);
+      const e = o?.entity;
+      if (!e || e === this || e.kind === 'static' || this.punchHits.has(e)) return;
+      this.punchHits.add(e);
+      const t = col.translation();
+      const p = new THREE.Vector3(t.x, t.y, t.z);
+      const dir = new THREE.Vector3(Math.sin(this.yaw), 0.15, Math.cos(this.yaw)).normalize();
+      if (e.kind === 'person') {
+        const part = o.part ?? B.CHEST;
+        e.damage({ amount: part === B.HEAD ? 14 : 9, part, point: p, dir, kind: 'blunt' });
+        e.stun += part === B.HEAD ? 0.55 : 0.3;
+        e.bodies[part].applyImpulse({ x: dir.x * 30, y: dir.y * 30, z: dir.z * 30 }, true);
+        if (e.alive) e.fear = Math.min(2, e.fear + 1);
+        e.fearFrom.copy(p);
+      } else {
+        e.impulse(dir.clone().multiplyScalar(40), p, o.part);
+      }
+      this.game.audio?.impact(e.kind === 'person' ? 'flesh' : e.material || 'wood', 0.8, p);
+    });
   }
 
   blockedAhead(pt) {
@@ -747,6 +849,7 @@ export class Person extends Entity {
   /** Called from the physics impact listener. impulse in N*s. */
   onImpact(part, impulse, otherEntity) {
     if (otherEntity === this) return;
+    if (this.punchTime > 0 && part === this.punchSide) return; // our own fist landing a punch
     // injury is driven by the body's velocity change this step, not raw contact force
     // (resting contacts and joint-limit fights produce force without any change in velocity)
     const body = this.ragdoll.bodies[part];
@@ -761,7 +864,7 @@ export class Person extends Entity {
     const amount = (dv - limit) * 7;
     const t = this.ragdoll.bodies[part].translation();
     this.damage({ amount, part, point: new THREE.Vector3(t.x, t.y, t.z), kind: 'blunt' });
-    if (dv > 9 && this.state === ST.ACTIVE) this.fall();
+    if (dv > 9 && this.state === ST.ACTIVE && part <= B.HEAD) this.fall();
   }
 
   heal() {

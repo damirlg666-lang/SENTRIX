@@ -6,7 +6,7 @@ import { WEAPONS, PROJECTILES } from '../catalog/weapons.js';
 import { Prop } from '../entities/prop.js';
 import { groundHeight } from '../world/map.js';
 
-export const TOOL_IDS = ['hand', 'weapon', 'explode', 'rope', 'push', 'freeze', 'heal', 'delete'];
+export const TOOL_IDS = ['hand', 'weapon', 'explode', 'rope', 'push', 'freeze', 'heal', 'delete', 'control'];
 export const EXPLODE_SIZES = [
   { id: 'small', name: 'Small', power: 0.6 },
   { id: 'medium', name: 'Medium', power: 1.3 },
@@ -108,6 +108,7 @@ export class Tools {
   // ------------------------------------------------------------------ selection
   select(id) {
     if (this.grab) this.release();
+    if (id !== 'control') this.releaseControl();
     this.spawnItem = null;
     this.ghost.visible = false;
     this.ropeStart = null;
@@ -133,6 +134,10 @@ export class Tools {
   }
 
   cancel() {
+    if (this.controlled) {
+      this.releaseControl();
+      return true;
+    }
     if (this.spawnItem) {
       this.spawnItem = null;
       this.ghost.visible = false;
@@ -190,6 +195,9 @@ export class Tools {
       case 'delete':
         this.deleteAt();
         break;
+      case 'control':
+        this.controlClick();
+        break;
       default:
         break;
     }
@@ -214,6 +222,10 @@ export class Tools {
   }
 
   key(code) {
+    if (this.controlled && code === 'Space') {
+      this.controlled.jump();
+      return true;
+    }
     if (code === 'KeyF' && this.grab) {
       this.pinGrab();
       return true;
@@ -277,6 +289,7 @@ export class Tools {
   update(dt) {
     this.updateRay();
     this.hover = this.pick();
+    this.updateControl();
     this.cooldown -= dt;
     if (this.active === 'weapon' && this.mouseDown && !this.spawnItem && this.weapon.auto) this.tryFire();
     this.updateViewmodel(dt);
@@ -654,6 +667,71 @@ export class Tools {
     this.game.fx?.poof(p, e.kind === 'vehicle' ? 2 : 1);
     this.game.audio?.click(500);
     this.game.remove(e);
+  }
+
+  // ------------------------------------------------------------------ control a person
+  controlClick() {
+    const e = this.hover?.owner?.entity;
+    if (e && e.kind === 'person' && e !== this.controlled) {
+      if (!e.alive) {
+        this.emit('toast', `${e.name} can't be controlled right now`);
+        return;
+      }
+      this.releaseControl();
+      this.controlled = e;
+      e.controlled = true;
+      e.target = null;
+      e.fear = 0;
+      const cam = this.game.cam;
+      cam.moveLock = true;
+      cam.follow = () => {
+        if (!this.controlled || this.controlled.removed) return null;
+        const t = this.controlled.bodies[2].translation();
+        return new THREE.Vector3(t.x, t.y + 0.35, t.z);
+      };
+      cam.goalDist = Math.min(cam.goalDist, 6);
+      this.emit('toast', `You control ${e.name}`);
+      this.emit('hint');
+      return;
+    }
+    if (this.controlled) this.controlled.punch();
+  }
+
+  releaseControl() {
+    const p = this.controlled;
+    if (!p) return;
+    p.controlled = false;
+    p.controlInput.x = 0;
+    p.controlInput.z = 0;
+    this.controlled = null;
+    this.game.cam.moveLock = false;
+    this.game.cam.follow = null;
+    this.emit('hint');
+  }
+
+  updateControl() {
+    const p = this.controlled;
+    if (!p) return;
+    if (p.removed || !p.alive) {
+      const name = p.name;
+      const dead = !p.removed && !p.alive;
+      this.releaseControl();
+      if (dead) this.emit('toast', `${name} died`);
+      return;
+    }
+    const cam = this.game.cam;
+    const k = cam.keys;
+    const yaw = cam.yaw;
+    const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+    const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+    let x = 0, z = 0;
+    if (k.has('KeyW') || k.has('ArrowUp')) { x += fx; z += fz; }
+    if (k.has('KeyS') || k.has('ArrowDown')) { x -= fx; z -= fz; }
+    if (k.has('KeyD') || k.has('ArrowRight')) { x += rx; z += rz; }
+    if (k.has('KeyA') || k.has('ArrowLeft')) { x -= rx; z -= rz; }
+    p.controlInput.x = x;
+    p.controlInput.z = z;
+    p.controlInput.run = k.has('ShiftLeft') || k.has('ShiftRight');
   }
 
   // ------------------------------------------------------------------ rope

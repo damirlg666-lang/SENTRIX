@@ -20,8 +20,9 @@ const ICONS = {
   freeze: '<svg viewBox="0 0 24 24"><path d="M12 2v20M4.2 6.5l15.6 11M4.2 17.5l15.6-11"/><path d="M9.5 3.5 12 6l2.5-2.5M9.5 20.5 12 18l2.5 2.5"/></svg>',
   heal: '<svg viewBox="0 0 24 24"><path d="M20.8 8.6a5 5 0 0 0-8.8-3.2 5 5 0 0 0-8.8 3.2c0 5.6 8.8 11.4 8.8 11.4s8.8-5.8 8.8-11.4z"/><path d="M12 9v6M9 12h6"/></svg>',
   delete: '<svg viewBox="0 0 24 24"><path d="M20 20H9L4.5 15.5a2 2 0 0 1 0-2.8l8.7-8.7a2 2 0 0 1 2.8 0l4 4a2 2 0 0 1 0 2.8L13 18"/><path d="M8 11l6 6"/></svg>',
+  control: '<svg viewBox="0 0 24 24"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><path d="M17.3 5H6.7a4 4 0 0 0-4 3.6l-.9 7.6A2.6 2.6 0 0 0 4.4 19c.8 0 1.5-.4 2-1l1.6-2h8l1.6 2c.5.6 1.2 1 2 1a2.6 2.6 0 0 0 2.6-2.8l-.9-7.6a4 4 0 0 0-4-3.6z"/></svg>',
 };
-const TOOL_NAMES = { hand: 'Hand', weapon: 'Weapons', explode: 'Explode', rope: 'Rope', push: 'Force', freeze: 'Freeze', heal: 'Heal', delete: 'Delete' };
+const TOOL_NAMES = { hand: 'Hand', weapon: 'Weapons', explode: 'Explode', rope: 'Rope', push: 'Force', freeze: 'Freeze', heal: 'Heal', delete: 'Delete', control: 'Control' };
 const EXPLODE_ICON = '<svg viewBox="0 0 24 24"><path d="M12 3l1.5 4.5L18 6l-1.6 4.4L21 12l-4.6 1.6L18 18l-4.5-1.5L12 21l-1.5-4.5L6 18l1.6-4.4L3 12l4.6-1.6L6 6l4.5 1.5z"/></svg>';
 
 const CROSSHAIR = '<svg viewBox="0 0 22 22" width="22" height="22" style="stroke:#fff;stroke-width:1.6;fill:none;filter:drop-shadow(0 0 2px #000)"><circle cx="11" cy="11" r="1.2" fill="#fff"/><path d="M11 1v6M11 15v6M1 11h6M15 11h6"/></svg>';
@@ -444,6 +445,7 @@ export class UI {
     else if (t.active === 'freeze') h = '<b>Click</b> to freeze or unfreeze. On people it pins the body part you click';
     else if (t.active === 'heal') h = '<b>Click</b> someone to heal or revive them';
     else if (t.active === 'delete') h = '<b>Click</b> to delete · <b>Ctrl+Z</b> undo last spawn';
+    else if (t.active === 'control') h = t.controlled ? '<b>WASD</b> walk · <b>Shift</b> run · <b>Space</b> jump · <b>Click</b> punch · <b>Esc</b> let go' : '<b>Click</b> a person to take control of them';
     h += '<br><b>Right drag</b> look · <b>WASD</b> move · <b>Tab</b> spawn menu · <b>H</b> help';
     $('hint').innerHTML = h;
   }
