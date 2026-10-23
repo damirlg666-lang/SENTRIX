@@ -59,11 +59,20 @@ const packed = gzipSync(Buffer.from(main), { level: 9 }).toString('base64');
 const loader = `<script id="game-code" type="text/plain">${packed}</script>
 <script>(async()=>{const b=Uint8Array.from(atob(document.getElementById("game-code").textContent),c=>c.charCodeAt(0));const code=await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream("gzip"))).text();const s=document.createElement("script");s.type="module";s.textContent=code;document.body.appendChild(s)})().catch(e=>{const f=document.getElementById("fatal");f.classList.remove("hidden");f.textContent="Failed to start: "+e.message})</script>`;
 
-let page = html
-  .replace(/<link rel="stylesheet" href="css\/style\.css">/, () => head)
-  .replace(/<script type="importmap">[\s\S]*?<\/script>/, '')
-  .replace(/<script type="module" src="js\/main\.js"><\/script>/, () => loader)
-  .replace('<!doctype html>', `<!doctype html>\n${notice}`);
+const assemble = (headPart, loaderPart) =>
+  html
+    .replace(/<link rel="stylesheet" href="css\/style\.css">/, () => headPart)
+    .replace(/<script type="importmap">[\s\S]*?<\/script>/, '')
+    .replace(/<script type="module" src="js\/main\.js"><\/script>/, () => loaderPart)
+    .replace('<!doctype html>', `<!doctype html>\n${notice}`);
+
+// The page can rebuild its own source to open itself in a new tab (an embed that may not go
+// full screen does that instead). The two big scripts are left as placeholders in that copy and
+// filled in from the running page, so the file does not carry everything twice.
+const shell = assemble(head.replace(worker, '%%WORKER%%'), loader.replace(packed, '%%GAME%%'));
+const selfSource = `<script id="page-shell" type="application/json">${JSON.stringify(shell).replace(/<\//g, '<\\/')}</script>
+<script>window.PAGE_SOURCE=()=>JSON.parse(document.getElementById("page-shell").textContent).replace("%%WORKER%%",()=>document.getElementById("model-worker").textContent).replace("%%GAME%%",()=>document.getElementById("game-code").textContent)</script>`;
+const page = assemble(head + '\n' + selfSource, loader);
 if (page.includes('src="js/main.js"') || page.includes('importmap')) throw new Error('index.html changed shape; update the build script');
 await fs.writeFile(out, page);
 console.log(`wrote ${path.relative(process.cwd(), out)} (${(page.length / 1048576).toFixed(2)} MB)`);

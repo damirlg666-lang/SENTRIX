@@ -333,9 +333,19 @@ export class UI {
     return !!(document.fullscreenElement || document.webkitFullscreenElement);
   }
 
-  /** Enter or leave full screen (has to run from a click or key press). */
+  /**
+   * Enter or leave full screen (has to run from a click or key press). Inside an embed that is
+   * not allowed to go full screen (a Google Sites embed, for one) the game opens in its own tab
+   * instead, where full screen works.
+   */
   async setFullscreen(on) {
     const el = document.documentElement;
+    const embedded = window.self !== window.top;
+    if (on && embedded && !document.fullscreenEnabled && !document.webkitFullscreenEnabled) {
+      this.openInNewTab();
+      this.syncFullscreen();
+      return;
+    }
     try {
       if (on && !this.isFullscreen()) {
         if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
@@ -346,10 +356,23 @@ export class UI {
         else document.webkitExitFullscreen?.();
       }
     } catch {
-      // embedded pages (e.g. a Google Sites embed) are often not allowed to go full screen
-      this.toast('Full screen is blocked here. Open the game in its own tab to use it.');
+      if (embedded) this.openInNewTab();
+      else this.toast('Full screen is not available in this browser.');
     }
     this.syncFullscreen();
+  }
+
+  /** Open a fresh copy of the game in a new tab (the single-file build carries its own source). */
+  openInNewTab() {
+    let url = location.href;
+    try {
+      const src = window.PAGE_SOURCE?.();
+      if (src) url = URL.createObjectURL(new Blob([src], { type: 'text/html' }));
+    } catch {
+      /* fall back to this page's address */
+    }
+    const w = window.open(url, '_blank');
+    this.toast(w ? 'Full screen is not allowed inside this embed, so the game opened in a new tab — use full screen there.' : 'Full screen is not allowed here and pop-ups are blocked. Allow pop-ups for this site to open the game in its own tab.');
   }
 
   syncFullscreen() {
