@@ -449,13 +449,19 @@ export class Tools {
       e.damage({ amount, part, point: hit.point, dir, kind: 'bullet' });
       const b = e.bodies[part];
       b.applyImpulseAtPoint({ x: dir.x * w.impulse * dmgScale, y: dir.y * w.impulse * dmgScale, z: dir.z * w.impulse * dmgScale }, { x: hit.point.x, y: hit.point.y, z: hit.point.z }, true);
-      game.fx?.bloodBurst(hit.point, back.clone().lerp(hit.normal, 0.5).normalize(), 0.7);
-      game.audio?.bulletHit('flesh', hit.point);
+      if (e.dummy) {
+        game.fx?.dust(hit.point, hit.normal, 5, [0.9, 0.75, 0.2]);
+        game.fx?.debris(hit.point, hit.normal, 6, [0.85, 0.7, 0.15]);
+        game.audio?.bulletHit('rubber', hit.point);
+      } else {
+        game.fx?.bloodBurst(hit.point, back.clone().lerp(hit.normal, 0.5).normalize(), 0.7);
+        game.audio?.bulletHit('flesh', hit.point);
+      }
       // exit wound: find the far side of the body part
       const handles = new Set(e.ragdoll.colliders.map((c) => c.handle));
       const farStart = hit.point.clone().addScaledVector(dir, 0.6);
       const exitHit = game.physics.raycast(farStart, back, 0.6, (c) => c.handle === e.ragdoll.colliders[part].handle);
-      if (exitHit && (pierce > 0 || w.damage > 25)) {
+      if (exitHit && (pierce > 0 || w.damage > 25) && !e.dummy) {
         game.fx?.bloodBurst(exitHit.point, dir, 1.1);
         e.wound(part, exitHit.point, 1.3);
       }
@@ -952,7 +958,7 @@ export class Tools {
           q.z += Math.sin(a) * 1.3;
           q.y = groundHeight(q.x, q.z) > q.y - 0.5 ? Math.max(q.y, groundHeight(q.x, q.z)) : q.y;
         }
-        ent = game.spawnPerson(q.add(new THREE.Vector3(0, 0.02, 0)), n > 1 ? Math.random() * Math.PI * 2 : yaw, { type: item.person });
+        ent = game.spawnPerson(q.add(new THREE.Vector3(0, 0.02, 0)), n > 1 ? Math.random() * Math.PI * 2 : yaw, { type: item.person, dummy: !!item.dummy });
       }
     } else {
       ent = item.spawn(game, p, yaw);

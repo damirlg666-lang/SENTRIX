@@ -32,6 +32,7 @@ export const CATEGORIES = [
       { id: 'big', name: 'Big guy', person: 'heavy', height: 1.8 },
       { id: 'slim', name: 'Tall guy', person: 'slim', height: 1.85 },
       { id: 'crowd', name: 'Crowd of 6', person: 'random', count: 6, height: 1.8 },
+      { id: 'dummy', name: 'Crash test dummy', person: 'male', dummy: true, height: 1.8, desc: 'No blood' },
     ],
   },
   {

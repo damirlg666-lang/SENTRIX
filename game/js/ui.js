@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { CATEGORIES } from './catalog/catalog.js';
 import { WEAPONS, grenadeModel } from './catalog/weapons.js';
 import { TOOL_IDS, EXPLODE_SIZES } from './tools/tools.js';
-import { createCharacterMesh, randomOutfit, prepareModels } from './characters/humanModel.js';
+import { createCharacterMesh, randomOutfit, dummyOutfit, prepareModels } from './characters/humanModel.js';
 import { B } from './characters/skeleton.js';
 import { carModel } from './entities/vehicle.js';
 import { PROPS } from './catalog/props.js';
@@ -230,7 +230,7 @@ export class UI {
     const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
     try {
       const people = {
-        person: ['male'], man: ['male'], woman: ['female'], big: ['heavy'], slim: ['slim'], crowd: ['female', 'male', 'heavy'],
+        person: ['male'], man: ['male'], woman: ['female'], big: ['heavy'], slim: ['slim'], crowd: ['female', 'male', 'heavy'], dummy: ['male'],
       };
       let seed = 11;
       const rnd = () => {
@@ -244,7 +244,7 @@ export class UI {
             obj = new THREE.Group();
             const types = people[item.id] || ['male'];
             types.forEach((t, i) => {
-              const ch = createCharacterMesh(t, randomOutfit(t, rnd), quality);
+              const ch = createCharacterMesh(t, item.dummy ? dummyOutfit() : randomOutfit(t, rnd), quality);
               relaxArms(ch);
               ch.root.position.x = (i - (types.length - 1) / 2) * 0.7;
               ch.root.position.z = -Math.abs(i - 1) * 0.3;

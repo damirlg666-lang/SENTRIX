@@ -319,6 +319,24 @@ export function randomOutfit(type, rnd = Math.random) {
   };
 }
 
+/** Yellow crash-test dummy: no clothes, no hair, black shoes. */
+export function dummyOutfit() {
+  return {
+    dummy: true,
+    female: false,
+    skin: 0xf0b915,
+    hair: 0x111111,
+    hairStyle: 'bald',
+    iris: 0x111111,
+    top: { type: 'none', color: 0x111111, color2: 0x111111, trim: false },
+    bottom: { type: 'none', color: 0x111111 },
+    shoes: { color: 0x18181a, sole: 0x18181a },
+    socks: 0x18181a,
+    belt: false,
+    beard: 'none',
+  };
+}
+
 // ------------------------------------------------------------------ painting
 const smooth = (a, b, x) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -362,7 +380,7 @@ export function paintCharacter(tpl, outfit) {
   const tucked = outfit.belt && (tt === 'tshirt' || tt === 'polo' || tt === 'tank' || tt === 'vneck');
   const hemY = tucked ? waistY + 0.004 : waistY - 0.035;
   const beltY = waistY - 0.012;
-  const sleeveU = tt === 'tank' ? -1 : tt === 'longsleeve' || tt === 'jacket' || tt === 'hoodie' ? 0.52 * h : tt === 'polo' ? 0.12 * h : 0.135 * h;
+  const sleeveU = tt === 'tank' || tt === 'none' ? -1 : tt === 'longsleeve' || tt === 'jacket' || tt === 'hoodie' ? 0.52 * h : tt === 'polo' ? 0.12 * h : 0.135 * h;
   const legHem = bt === 'shorts' ? j.kneeL[1] + 0.12 : bt === 'skirt' ? j.kneeL[1] + 0.07 : 0.1;
   const topThick = tt === 'jacket' ? 0.0085 : tt === 'hoodie' ? 0.0065 : 0.0034;
   const armpitY = j.chestC[1];
@@ -370,6 +388,7 @@ export function paintCharacter(tpl, outfit) {
   const collarR = tt === 'tank' ? 0.1 : tt === 'vneck' ? 0.072 : 0.066;
   const collarFront = tt === 'vneck' || tt === 'tank' ? 0.35 : 1.15; // deep fronts reach down the chest
   const strapX = 0.095 * sw;
+  const dummy = !!outfit.dummy; // plain plastic face: no lips, blush or brows
 
   const neckLine = (x, z) => {
     let y = neckY - 0.028 + 0.016 * smooth(0.0, -0.05, z);
@@ -386,7 +405,7 @@ export function paintCharacter(tpl, outfit) {
     const x = P[v * 3], y = P[v * 3 + 1], z = P[v * 3 + 2];
     const lab = tpl.label[v];
     const pc = tpl.piece[v];
-    let rough = 0.5;
+    let rough = dummy ? 0.34 : 0.5;
     let det = D.SKIN;
     let off = 0;
     c.copy(skin);
@@ -397,10 +416,10 @@ export function paintCharacter(tpl, outfit) {
       det = D.HAIR;
     } else if (pc === PIECE.HEAD) {
       const lx = (x - hc[0]) / hs, ly = (y - hc[1]) / hs, lz = (z - hc[2]) / hs;
-      if (lab === L.EAR || lab === L.NOSE) c.lerp(earC, 0.08);
-      const ck = Math.max(0, 1 - Math.hypot(Math.abs(lx) - 0.044, ly + 0.018, (lz - 0.07) * 0.7) / 0.024);
+      if (!dummy && (lab === L.EAR || lab === L.NOSE)) c.lerp(earC, 0.08);
+      const ck = dummy ? 0 : Math.max(0, 1 - Math.hypot(Math.abs(lx) - 0.044, ly + 0.018, (lz - 0.07) * 0.7) / 0.024);
       c.lerp(cheekC, ck * 0.14);
-      if (lab === L.LIPS) {
+      if (lab === L.LIPS && !dummy) {
         c.copy(lips);
         rough = 0.36;
         if (Math.abs(ly + 0.0465) < 0.0017 && Math.abs(lx) < 0.021) c.multiplyScalar(0.42);
@@ -415,7 +434,7 @@ export function paintCharacter(tpl, outfit) {
       const k = Math.min(1, Math.max(0, (ax - 0.011) / 0.042));
       const arch = 0.033 + 0.0075 * Math.sin(Math.PI * k) - k * 0.002;
       const thick = (outfit.female ? 0.0027 : 0.004) * (1 - k * 0.55);
-      face[v * 2] = Math.min(thick - Math.abs(ly - arch), ax - 0.011, 0.053 - ax, lz - 0.06) * hs;
+      if (!dummy) face[v * 2] = Math.min(thick - Math.abs(ly - arch), ax - 0.011, 0.053 - ax, lz - 0.06) * hs;
       // beard / stubble / mustache region
       if (outfit.beard !== 'none' && lab !== L.LIPS && lab !== L.NOSE) {
         const hole = 1 - Math.hypot(lx / 0.028, (ly + 0.047) / 0.017);
@@ -436,7 +455,7 @@ export function paintCharacter(tpl, outfit) {
       // combines per pixel, so hems stay crisp even where they cross mesh triangles.
       let sBottom = -1, sTopRest = 1, sTop2 = -1, torso = -1, leg = -1, neck = 1, sleeve = 1, collar = 1;
       if (isLeg) {
-        sBottom = y - legHem;
+        sBottom = bt === 'none' ? -1 : y - legHem;
         sTopRest = -1;
         leg = 1;
       } else if (isArmL || isArmR) {
@@ -446,8 +465,8 @@ export function paintCharacter(tpl, outfit) {
         const u = (x - sh[0]) * d[0] + (y - sh[1]) * d[1] + (z - sh[2]) * d[2];
         sleeve = sleeveU - u;
       } else {
-        sBottom = waistY - y;
-        sTopRest = y - hemY;
+        sBottom = bt === 'none' ? -1 : waistY - y;
+        sTopRest = tt === 'none' ? -1 : y - hemY;
         neck = neckLine(x, z) - y;
         // the collar opening is a ring around the neck, so shoulders stay covered
         const dz = z - neckZ;
@@ -670,6 +689,7 @@ export function makeCharacterMaterial(outfit) {
 }
 
 const eyeMats = new Map();
+let dummyEyeMat = null;
 function eyeMaterial(iris) {
   if (!eyeMats.has(iris)) {
     eyeMats.set(iris, new THREE.MeshPhysicalMaterial({ map: eyeTexture(iris), roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.03 }));
@@ -755,7 +775,8 @@ export function createCharacterMesh(type, outfit, quality = 'high') {
   if (!eyeGeo) eyeGeo = new THREE.SphereGeometry(EYE.r, 24, 16).rotateX(Math.PI / 2);
   const head = bones[B.HEAD];
   const hs = sk.params.head;
-  const eyeMat = eyeMaterial(outfit.iris);
+  if (outfit.dummy && !dummyEyeMat) dummyEyeMat = new THREE.MeshPhysicalMaterial({ color: 0x0c0c0e, roughness: 0.3, clearcoat: 1 });
+  const eyeMat = outfit.dummy ? dummyEyeMat : eyeMaterial(outfit.iris);
   const lg = lidGeometry(outfit.skin);
   const eyes = [];
   const lids = [];

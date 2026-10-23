@@ -3,6 +3,7 @@
 A 3D physics sandbox in the browser: spawn people and objects, then grab, throw, shoot,
 blow up, tie and freeze them. People are active ragdolls — they stand, walk around, run
 away from danger, fall over when hit, get back up, bleed, and can be knocked out or killed.
+A bloodless crash test dummy is in the People tab too.
 
 Everything (characters, props, textures, sounds) is generated procedurally at load time,
 so the game ships without any image, model or audio files.

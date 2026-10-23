@@ -6,7 +6,7 @@ import { Entity } from './entity.js';
 import { GROUPS } from '../engine/physics.js';
 import { B, BONE_COUNT, BONE_NAMES, makeSkeleton } from '../characters/skeleton.js';
 import { Ragdoll } from '../characters/ragdoll.js';
-import { createCharacterMesh, randomOutfit, paintDamage, clearDamage } from '../characters/humanModel.js';
+import { createCharacterMesh, randomOutfit, dummyOutfit, paintDamage, clearDamage } from '../characters/humanModel.js';
 
 export const ST = {
   ACTIVE: 'active',
@@ -119,8 +119,9 @@ export class Person extends Entity {
     this.kind = 'person';
     const type = opts.type || 'male';
     this.type = type;
-    this.outfit = opts.outfit || randomOutfit(type);
-    this.name = opts.name || FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)];
+    this.outfit = opts.outfit || (opts.dummy ? dummyOutfit() : randomOutfit(type));
+    this.dummy = !!this.outfit.dummy;
+    this.name = opts.name || (this.dummy ? 'Crash test dummy' : FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)]);
     this.sk = makeSkeleton(type);
     const pos = opts.position || new THREE.Vector3();
     this.yaw = opts.yaw ?? 0;
@@ -763,7 +764,7 @@ export class Person extends Entity {
     this.stun += dmg / (info.kind === 'bullet' ? 45 : 30);
     this.lastHit = this.time;
     if (info.kind === 'bullet' || info.kind === 'cut') {
-      this.bleed += dmg * 0.05 * (info.bleed ?? 1);
+      if (!this.dummy) this.bleed += dmg * 0.05 * (info.bleed ?? 1);
       if (info.point) this.addWound(part, info.point);
     }
     if (info.point) {
@@ -780,10 +781,10 @@ export class Person extends Entity {
     if (this.state === ST.ACTIVE && this.stun > 0.6) this.fall();
     if (wasAlive && this.alive && this.voiceCooldown <= 0 && dmg > 6) {
       this.voiceCooldown = 0.8 + Math.random();
-      this.game.audio?.voice(this, Math.min(1, dmg / 40));
+      if (!this.dummy) this.game.audio?.voice(this, Math.min(1, dmg / 40));
     }
     // visuals
-    if (this.ch && info.point && this.game.settings?.blood !== false) {
+    if (this.ch && info.point && this.game.settings?.blood !== false && !this.dummy) {
       if (info.kind === 'bullet' || info.kind === 'cut') {
         paintDamage(this.ch, part, info.point, 0.022 + Math.min(0.03, dmg * 0.0008), 1, 0);
         paintDamage(this.ch, part, info.point, 0.06 + Math.min(0.06, dmg * 0.002), 0.25, 0);
@@ -809,6 +810,7 @@ export class Person extends Entity {
   /** Blood dripping from open wounds and a pool under a body lying still. */
   updateBleeding(dt) {
     const fx = this.game.fx;
+    if (this.dummy) return;
     if (!fx || this.game.settings?.blood === false || dt <= 0) return;
     if (this.bleed > 0.25 && this.wounds.length) {
       this.dripTimer = (this.dripTimer ?? 0) - dt * Math.min(4, this.bleed);
@@ -841,7 +843,7 @@ export class Person extends Entity {
 
   /** Paint a bullet wound without dealing damage (used for exit wounds). */
   wound(part, point, scale = 1) {
-    if (!this.ch || this.game.settings?.blood === false) return;
+    if (this.dummy || !this.ch || this.game.settings?.blood === false) return;
     paintDamage(this.ch, part, point, 0.026 * scale, 1, 0);
     paintDamage(this.ch, part, point, 0.07 * scale, 0.3, 0);
   }
@@ -910,7 +912,7 @@ export class Person extends Entity {
     }
     for (const l of this.ch.lids) l.rotation.x += (lid - l.rotation.x) * Math.min(1, dt * 30);
     // pallor from blood loss / death
-    const pale = this.state === ST.DEAD ? Math.min(1, 0.35 + this.deathTime / 25) : Math.max(0, (60 - this.blood) / 60);
+    const pale = this.dummy ? 0 : this.state === ST.DEAD ? Math.min(1, 0.35 + this.deathTime / 25) : Math.max(0, (60 - this.blood) / 60);
     this.pale += (pale - this.pale) * Math.min(1, dt);
     this.ch.material.userData.uniforms.uPale.value = this.pale;
   }
