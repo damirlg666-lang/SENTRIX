@@ -10,10 +10,15 @@ dummy is in the People tab too.
 ### What's in it
 
 - **People**: random men and women in four body types, crowds, and a crash test dummy.
-- **Injuries**: bullet wounds, bleeding and blood pools, broken bones (limp, bending the wrong
-  way; broken legs or backs stop people standing), and dismemberment — big bullets, blasts,
-  blades, violent impacts, or pulling on an anchored body can take limbs, heads or the
-  lower body off, leaving a skin/fat/muscle/bone cross-section and arterial spray.
+- **Injuries**: bullet holes, bleeding, blood running down and pooling, broken bones (the limb
+  kinks and wobbles at the break, sometimes with bone showing; broken legs or backs stop
+  people standing), eyes knocked out and dangling, broken jaws hanging open, heart and lung
+  hits, and dismemberment — big bullets, blasts, blades, violent impacts, or pulling on an
+  anchored body can take limbs, heads or the lower body off, leaving a skin/fat/muscle/bone
+  cross-section and arterial spray. Cut someone in half and the organs and guts spill out;
+  stand them next to a big blast and they come apart.
+- **Reactions**: people flinch and stagger when hit, clutch their wounds, limp on a shot leg,
+  curl up and writhe on the ground, and twitch after a violent death.
 - **Melee**: knife, sword and axe, both as weapons in the weapon bar (stab, slash, chop under
   the cursor) and as physical props that cut when they move fast and stick in point-first.
 - **Syringes**: adrenaline (wakes people up, stronger and faster; too much stops the heart),
@@ -23,6 +28,10 @@ dummy is in the People tab too.
   panic. The flamethrower lights anything in its cone; explosions start fires.
 - **Electricity**: a taser that makes people convulse, and a tesla coil that throws
   lightning at whoever comes close.
+- **Rockets**: a missile (G launches it; it explodes on impact, and stuck on someone it takes
+  them along) and fireworks.
+- **Buildings**: a house, a wooden shed and a watchtower built from separate blocks, planks,
+  pillars, slabs and glass. Shoot, cut or blow pieces out and the rest collapses.
 - **Machines and props**: thrusters that stick to things, explosives (barrels, TNT, mines),
   crates, barrels, furniture, balloons, dominoes, a brick wall and a drivable car.
 
@@ -73,6 +82,7 @@ Rebuild it after changing the code with `npm install --no-save esbuild` and
 | Activate (arm TNT, start a car, switch on a thruster or tesla coil) | `G` while hovering it | — |
 | Delete what is under the cursor | `Delete` | Delete tool |
 | Pause / slow motion | `P` / `T` | Top bar |
+| Full screen | `Alt` + `Enter`, the top bar button or Settings | Top bar |
 | Undo last spawn | `Ctrl` + `Z` | Top bar |
 
 ### Tools
@@ -122,7 +132,12 @@ gravity, slow-motion speed, volume, blood on/off and whether people walk around.
   inside of the body shows through the wound.
 - `js/entities/chem.js`, `js/catalog/syringes.js` – syringe substances and their effects.
 - `js/fx/fire.js` – flammability, burning, charring and fire spread.
-- `js/catalog/melee.js`, `js/catalog/machines.js` – blades, thruster and tesla coil.
+- `js/catalog/melee.js`, `js/catalog/machines.js`, `js/catalog/rockets.js` – blades,
+  thruster, tesla coil, missile and fireworks.
+- `js/characters/softbones.js` – wound-hole decals, popped eyes, broken jaws and wobbling
+  fractures (extra skin bones added to one person's skeleton).
+- `js/entities/reactions.js` – flinching, staggering, clutching wounds, limping, writhing.
+- `js/catalog/buildings.js` – building layouts and how pieces break apart.
 - `js/engine/` – renderer, sky and image-based lighting, post-processing, camera, physics
   wrapper and procedural textures.
 - `js/world/map.js` – terrain, plaza, drop tower, ramp, container, trampoline, trees.

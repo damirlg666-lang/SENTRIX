@@ -313,6 +313,8 @@ export class UI {
       g.clearAll();
       this.toast('Cleared');
     });
+    $('btn-fullscreen').addEventListener('click', () => this.setFullscreen(!this.isFullscreen()));
+    for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => this.syncFullscreen());
     $('btn-settings').addEventListener('click', () => this.openModal('settings'));
     $('btn-help').addEventListener('click', () => this.openModal('help'));
     for (const el of document.querySelectorAll('[data-close]')) el.addEventListener('click', () => this.closeModal(el.dataset.close));
@@ -325,6 +327,38 @@ export class UI {
 
   undo() {
     if (this.game.undo()) this.toast('Removed last spawn');
+  }
+
+  isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+
+  /** Enter or leave full screen (has to run from a click or key press). */
+  async setFullscreen(on) {
+    const el = document.documentElement;
+    try {
+      if (on && !this.isFullscreen()) {
+        if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+        else throw new Error('unsupported');
+      } else if (!on && this.isFullscreen()) {
+        if (document.exitFullscreen) await document.exitFullscreen();
+        else document.webkitExitFullscreen?.();
+      }
+    } catch {
+      // embedded pages (e.g. a Google Sites embed) are often not allowed to go full screen
+      this.toast('Full screen is blocked here. Open the game in its own tab to use it.');
+    }
+    this.syncFullscreen();
+  }
+
+  syncFullscreen() {
+    const on = this.isFullscreen();
+    const b = $('btn-fullscreen');
+    b.classList.toggle('active', on);
+    b.title = on ? 'Exit full screen' : 'Full screen';
+    b.querySelector('path').setAttribute('d', on ? 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5' : 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5');
+    $('set-fullscreen').checked = on;
   }
 
   toggleSlowmo() {
@@ -412,6 +446,7 @@ export class UI {
         g.saveSettings();
       });
     };
+    $('set-fullscreen').addEventListener('change', (e) => this.setFullscreen(e.target.checked));
     toggle('set-blood', 'blood');
     toggle('set-ai', 'ai');
     toggle('set-fps', 'fps', (v) => {

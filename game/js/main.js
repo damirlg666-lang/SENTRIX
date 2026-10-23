@@ -191,6 +191,11 @@ function bindInput(game) {
       if (!ui.closeAnyModal() && !tools.cancel() && tools.grab) tools.release();
       return;
     }
+    if (e.altKey && e.code === 'Enter') {
+      e.preventDefault();
+      ui.setFullscreen(!ui.isFullscreen());
+      return;
+    }
     if (ui.modalOpen) return;
     if (e.code === 'Tab') {
       e.preventDefault();
