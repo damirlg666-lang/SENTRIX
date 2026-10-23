@@ -485,6 +485,37 @@ export class Audio {
     osc.stop(t + 0.22 * R);
   }
 
+  /** Firework burst: a hollow pop followed by a scatter of crackles. */
+  firework(pos) {
+    if (!this.canPlay()) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const R = 1 / this.rate;
+    const o = this.out(pos, 0.9, 0.7);
+    const n = this.noiseSrc(0.5);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(2200 * this.rate, t);
+    lp.frequency.exponentialRampToValueAtTime(150 * this.rate, t + 0.4 * R);
+    const g = ctx.createGain();
+    this.env(g, t, 0.003, 1, 0.45 * R);
+    n.connect(lp);
+    lp.connect(g);
+    g.connect(o);
+    for (let i = 0; i < 14; i++) {
+      const t0 = t + (0.35 + Math.random() * 0.9) * R;
+      const c = this.noiseSrc(0.03);
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 3000;
+      const cg = ctx.createGain();
+      this.env(cg, t0, 0.001, rnd(0.08, 0.25), 0.025);
+      c.connect(hp);
+      hp.connect(cg);
+      cg.connect(o);
+    }
+  }
+
   /** Bone snapping: a dry, bright crack with a short woody knock. */
   crack(pos) {
     if (!this.canPlay()) return;

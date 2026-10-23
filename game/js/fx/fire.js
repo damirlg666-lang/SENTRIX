@@ -54,6 +54,7 @@ export class FireSystem {
     if (e.fuelLeft < 1) return false;
     e.onFire = { fuel: Math.min(e.fuelLeft, 6 + 14 * strength), t: 0, emit: 0, tick: 0, radius: fireRadius(e) };
     this.burning.add(e);
+    e.def?.onIgnite?.(e);
     if (e.kind === 'person' && e.conscious && !e.dummy) {
       e.voiceCooldown = 0.3;
       this.game.audio?.voice(e, 1);

@@ -1110,6 +1110,7 @@ export class Tools {
           if (o.isMesh) o.material = this.ghostMat;
         });
         built.mesh.position.y = (def.bottom ?? (def.size ?? 0.5) / 2) + 0.02;
+        if (def.spawnRot) built.mesh.rotation.set(...def.spawnRot);
         g.add(built.mesh);
       }
       this.ghostCache.set(item.id, g);

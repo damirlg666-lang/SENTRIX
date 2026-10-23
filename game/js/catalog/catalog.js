@@ -4,6 +4,7 @@ import { PROPS } from './props.js';
 import { MELEE_PROPS } from './melee.js';
 import { SYRINGES } from './syringes.js';
 import { MACHINES } from './machines.js';
+import { ROCKETS } from './rockets.js';
 import { Prop } from '../entities/prop.js';
 import { Car } from '../entities/vehicle.js';
 
@@ -18,7 +19,9 @@ function propItem(def, extra = {}) {
     spawn(game, point, yaw) {
       const p = point.clone();
       p.y += (def.bottom ?? (def.size ?? 0.5) / 2) + 0.02 + (extra.lift ?? 0);
-      return game.add(new Prop(game, def, p, yawQ(yaw), extra.opts || {}));
+      const q = yawQ(yaw);
+      if (def.spawnRot) q.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(...def.spawnRot)));
+      return game.add(new Prop(game, def, p, q, extra.opts || {}));
     },
     ...extra,
   };
@@ -64,6 +67,8 @@ export const CATEGORIES = [
       propItem(PROPS.explosiveBarrel, { desc: 'Shoot it' }),
       propItem(PROPS.tnt, { desc: 'Activate (G) or shoot' }),
       propItem(PROPS.mine, { desc: 'Steps trigger it' }),
+      propItem(ROCKETS.missile, { desc: 'G to launch · sticks to people' }),
+      propItem(ROCKETS.firework, { desc: 'G to light' }),
     ],
   },
   {

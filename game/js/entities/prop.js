@@ -117,6 +117,7 @@ export class Prop extends Entity {
   /** Stick fast to a body part at the current relative pose (blades, needles, thrusters). */
   embed(entity, part) {
     if (this.embedded) this.unembed();
+    if (this.frozen) this.setFrozen(false);
     const world = this.game.physics.world;
     const pb = entity.bodies[part];
     const t = this.body.translation();

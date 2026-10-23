@@ -512,7 +512,7 @@ export class UI {
     }
     if (e.kind === 'prop' && e.fuse > 0) state = `Exploding in ${e.fuse.toFixed(1)}s`;
     else if (e.kind === 'prop' && e.def.explosive && e.def.fuseTime) state = 'Press G to arm';
-    else if (e.kind === 'prop' && e.def.onActivate) state = e.on ? 'Running · G to stop' : 'Press G to start';
+    else if (e.kind === 'prop' && e.def.onActivate) state = e.launched ? 'Launched!' : e.on ? 'Running · G to stop' : 'Press G to start';
     else if (e.kind === 'prop' && e.fill !== undefined) state = e.fill > 0 ? (e.embedded ? 'Injecting…' : 'Place it on someone') : 'Empty';
     if (e.frozen) state = 'Frozen';
     bar.classList.toggle('hidden', frac === null);
