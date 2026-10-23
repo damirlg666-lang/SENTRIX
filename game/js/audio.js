@@ -419,6 +419,7 @@ export class Audio {
    */
   loop(kind, pos) {
     if (!this.canPlay()) return null;
+    if (kind === 'drone') return this.motorLoop(pos);
     const ctx = this.ctx;
     const cfg = { thruster: ['lowpass', 650, 0.6, 0.7], flame: ['bandpass', 1100, 0.45, 0.6] }[kind] || ['lowpass', 800, 0.4, 0.7];
     const src = ctx.createBufferSource();
@@ -483,6 +484,44 @@ export class Audio {
     og.connect(o);
     osc.start(t);
     osc.stop(t + 0.22 * R);
+  }
+
+  /** Buzzing propeller motors: two detuned saw waves through a low-pass, pitch follows the load. */
+  motorLoop(pos) {
+    const ctx = this.ctx;
+    const pan = this.panner(pos);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 1400;
+    const g = ctx.createGain();
+    g.gain.value = 0.0001;
+    g.gain.setTargetAtTime(0.16, ctx.currentTime, 0.1);
+    const oscs = [0, 7].map((detune) => {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = (180 + detune) * this.rate;
+      o.connect(lp);
+      o.start();
+      return o;
+    });
+    lp.connect(g);
+    g.connect(pan);
+    pan.connect(this.master);
+    let stopped = false;
+    return {
+      setPos: (p) => this.placePanner(pan, p),
+      setPitch: (k) => {
+        const t = ctx.currentTime;
+        oscs.forEach((o, i) => o.frequency.setTargetAtTime((180 + i * 7) * k * this.rate, t, 0.05));
+      },
+      stop: () => {
+        if (stopped) return;
+        stopped = true;
+        const t = ctx.currentTime;
+        g.gain.setTargetAtTime(0.0001, t, 0.05);
+        for (const o of oscs) o.stop(t + 0.4);
+      },
+    };
   }
 
   /** Firework burst: a hollow pop followed by a scatter of crackles. */

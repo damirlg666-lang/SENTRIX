@@ -144,7 +144,7 @@ export class UI {
     const t = this.tools;
     for (const b of $('toolbar').children) b.classList.toggle('active', !t.spawnItem && b.dataset.tool === t.active);
     const wb = $('weapon-bar');
-    if (t.active === 'weapon' && !t.spawnItem) {
+    if (t.active === 'weapon' && !t.spawnItem && !t.scoped) {
       wb.classList.remove('hidden');
       wb.innerHTML = '';
       WEAPONS.forEach((w, i) => {
@@ -170,7 +170,7 @@ export class UI {
       });
     } else wb.classList.add('hidden');
     const weaponMode = t.active === 'weapon' && !t.spawnItem;
-    $('crosshair').classList.toggle('hidden', !weaponMode);
+    $('crosshair').classList.toggle('hidden', !weaponMode || t.scoped);
     document.getElementById('view').style.cursor = weaponMode ? 'none' : t.spawnItem ? 'copy' : t.active === 'hand' ? 'grab' : 'crosshair';
   }
 
@@ -480,6 +480,10 @@ export class UI {
   // ------------------------------------------------------------------ feedback
   onToolEvent(type, data) {
     if (type === 'toast') this.toast(data);
+    if (type === 'scope') {
+      $('scope').classList.toggle('hidden', !data);
+      this.refreshToolbar();
+    }
     if (type === 'tool' || type === 'weapon' || type === 'spawn') {
       this.refreshToolbar();
       if (type === 'spawn') this.renderCatalogItems();
@@ -503,6 +507,7 @@ export class UI {
       const w = t.weapon;
       const verb = { stab: 'stab with the', slash: 'swing the', chop: 'chop with the' }[w.melee] || 'fire the';
       h = `<b>Click</b> to ${verb} ${w.name.toLowerCase()}${w.auto ? ' (hold for auto)' : ''} · <b>R</b> next weapon`;
+      if (w.scope) h += t.scoped ? ' · <b>Wheel</b> zoom · <b>Shift</b> hold breath' : ' · hold <b>right mouse</b> or <b>Z</b> to aim with the scope';
     }
     else if (t.active === 'explode') h = '<b>Click</b> anywhere to make an explosion · pick the size above';
     else if (t.active === 'rope') h = t.ropeStart ? '<b>Click</b> the second point to tie the rope · <b>Esc</b> cancel' : '<b>Click</b> two points to tie them together (people, props or the world)';
@@ -550,7 +555,7 @@ export class UI {
     const tip = $('hover-tip');
     const t = this.tools;
     const e = t.grab?.entity || t.hover?.owner?.entity;
-    if (!e || e.kind === 'static' || this.pointerOverUI) {
+    if (!e || e.kind === 'static' || this.pointerOverUI || t.scoped) {
       tip.classList.add('hidden');
       return;
     }
@@ -573,7 +578,7 @@ export class UI {
     }
     if (e.kind === 'prop' && e.fuse > 0) state = `Exploding in ${e.fuse.toFixed(1)}s`;
     else if (e.kind === 'prop' && e.def.explosive && e.def.fuseTime) state = 'Press G to arm';
-    else if (e.kind === 'prop' && e.def.onActivate) state = e.launched ? 'Launched!' : e.on ? 'Running · G to stop' : 'Press G to start';
+    else if (e.kind === 'prop' && e.def.onActivate) state = e.def.statusText ? e.def.statusText(e) : e.launched ? 'Launched!' : e.on ? 'Running · G to stop' : 'Press G to start';
     else if (e.kind === 'prop' && e.fill !== undefined) state = e.fill > 0 ? (e.embedded ? 'Injecting…' : 'Place it on someone') : 'Empty';
     if (e.frozen) state = 'Frozen';
     bar.classList.toggle('hidden', frac === null);

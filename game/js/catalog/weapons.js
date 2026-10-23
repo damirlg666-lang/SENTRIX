@@ -156,7 +156,7 @@ export const WEAPONS = [
   { id: 'pistol', name: 'Pistol', model: pistolModel, damage: 26, impulse: 14, rate: 0.16, auto: false, spread: 0.004, recoil: 0.06, sound: 'pistol', pierce: 0, pos: [0.2, -0.13, -0.5] },
   { id: 'rifle', name: 'Assault rifle', model: rifleModel, damage: 30, impulse: 18, rate: 0.085, auto: true, spread: 0.012, recoil: 0.04, sound: 'rifle', pierce: 1, pos: [0.24, -0.16, -0.62] },
   { id: 'shotgun', name: 'Shotgun', model: shotgunModel, damage: 14, impulse: 9, rate: 0.75, auto: false, spread: 0.055, pellets: 9, recoil: 0.12, sound: 'shotgun', pierce: 0, pos: [0.24, -0.16, -0.62] },
-  { id: 'sniper', name: 'Sniper rifle', model: sniperModel, damage: 120, impulse: 70, rate: 1.1, auto: false, spread: 0.0, recoil: 0.16, sound: 'sniper', pierce: 3, pos: [0.24, -0.17, -0.66] },
+  { id: 'sniper', name: 'Sniper rifle', model: sniperModel, damage: 120, impulse: 70, rate: 1.1, auto: false, spread: 0.0, recoil: 0.16, sound: 'sniper', pierce: 3, scope: 8, pos: [0.24, -0.17, -0.66] },
   { id: 'rocket', name: 'Rocket launcher', model: launcherModel, rate: 1.0, auto: false, projectile: 'rocket', recoil: 0.12, sound: 'rocket', pos: [0.26, -0.15, -0.62] },
   { id: 'grenade', name: 'Grenade', model: grenadeModel, rate: 0.6, auto: false, projectile: 'grenade', recoil: 0.0, sound: null, pos: [0.18, -0.12, -0.42] },
   // melee weapons strike whatever is under the cursor

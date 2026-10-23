@@ -17,6 +17,7 @@ export const EXPLODE_SIZES = [
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _q = new THREE.Quaternion();
+const CENTER = new THREE.Vector2(0, 0);
 
 function bodyLocal(body, worldPoint) {
   const t = body.translation();
@@ -111,6 +112,7 @@ export class Tools {
   // ------------------------------------------------------------------ selection
   select(id) {
     if (this.grab) this.release();
+    if (id !== 'weapon') this.setScope(false);
     if (id !== 'control') this.releaseControl();
     this.spawnItem = null;
     this.ghost.visible = false;
@@ -122,6 +124,7 @@ export class Tools {
 
   selectWeapon(i) {
     this.weaponIndex = (i + WEAPONS.length) % WEAPONS.length;
+    if (!this.canScope()) this.setScope(false);
     if (this.active !== 'weapon') this.select('weapon');
     this.cooldown = 0.15;
     this.recoil = -0.15; // small "raise" animation
@@ -130,6 +133,7 @@ export class Tools {
 
   selectSpawn(item) {
     if (this.grab) this.release();
+    this.setScope(false);
     this.spawnItem = item;
     this.spawnYaw = 0;
     this.buildGhost(item);
@@ -137,6 +141,10 @@ export class Tools {
   }
 
   cancel() {
+    if (this.scoped) {
+      this.setScope(false);
+      return true;
+    }
     if (this.controlled) {
       this.releaseControl();
       return true;
@@ -211,8 +219,30 @@ export class Tools {
     if (this.grab) this.release();
   }
 
+  /** Only the sniper rifle has a scope. */
+  canScope() {
+    return this.active === 'weapon' && !this.spawnItem && this.weapon.scope;
+  }
+
+  setScope(on) {
+    if (on && !this.scoped && this.canScope()) {
+      this.scoped = true;
+      this.game.cam.enterScope(this.weapon.scope);
+      this.game.audio?.click(500);
+      this.emit('scope', true);
+    } else if (!on && this.scoped) {
+      this.scoped = false;
+      this.game.cam.exitScope();
+      this.emit('scope', false);
+    }
+  }
+
   /** Returns true if the wheel was used by the tool. */
   wheel(delta) {
+    if (this.scoped) {
+      this.game.cam.scopeZoom(delta);
+      return true;
+    }
     if (this.grab) {
       this.grab.dist = THREE.MathUtils.clamp(this.grab.dist * Math.pow(1.0012, -delta), 0.8, 80);
       return true;
@@ -269,7 +299,8 @@ export class Tools {
 
   // ------------------------------------------------------------------ per-frame
   updateRay() {
-    this.raycaster.setFromCamera(this.pointer, this.game.camera);
+    // through a scope, shots go where the crosshair in the middle points
+    this.raycaster.setFromCamera(this.scoped ? CENTER : this.pointer, this.game.camera);
     this.rayOrigin.copy(this.raycaster.ray.origin);
     this.rayDir.copy(this.raycaster.ray.direction);
   }
@@ -431,8 +462,9 @@ export class Tools {
     }
     const game = this.game;
     const origin = this.rayOrigin.clone();
-    const muzzle = this.muzzleWorld();
+    const muzzle = this.scoped ? origin.clone().add(new THREE.Vector3(0, -0.04, 0)) : this.muzzleWorld();
     this.recoil = w.recoil;
+    if (this.scoped && game.cam.scope) game.cam.scope.pitch -= 0.012; // the rifle kicks the aim up
     if (w.projectile) {
       this.launch(w, muzzle);
       return;
@@ -679,7 +711,7 @@ export class Tools {
   }
 
   updateViewmodel(dt) {
-    const show = this.active === 'weapon' && !this.spawnItem;
+    const show = this.active === 'weapon' && !this.spawnItem && !this.scoped;
     this.viewmodel.visible = show;
     if (!show) return;
     const w = this.weapon;

@@ -28,8 +28,9 @@ dummy is in the People tab too.
   panic. The flamethrower lights anything in its cone; explosions start fires.
 - **Electricity**: a taser that makes people convulse, and a tesla coil that throws
   lightning at whoever comes close.
-- **Rockets**: a missile (G launches it; it explodes on impact, and stuck on someone it takes
-  them along) and fireworks.
+- **Rockets and drones**: a missile (G launches it; it explodes on impact, and stuck on someone
+  it takes them along), fireworks, and a kamikaze drone that takes off, hunts down the nearest
+  person and blows up.
 - **Buildings**: a house, a wooden shed and a watchtower built from separate blocks, planks,
   pillars, slabs and glass. Shoot, cut or blow pieces out and the rest collapses.
 - **Machines and props**: thrusters that stick to things, explosives (barrels, TNT, mines),
@@ -91,7 +92,8 @@ Rebuild it after changing the code with `npm install --no-save esbuild` and
   mid-air, letting go throws it.
 - **Weapons** – pistol, assault rifle, shotgun, sniper rifle (penetrates, breaks bones and
   can take limbs off), rocket launcher, grenades, knife, sword, axe, flamethrower and taser.
-  `R` switches weapon.
+  `R` switches weapon. The sniper rifle has a scope: hold the right mouse button (or press `Z`)
+  to look through it, the wheel zooms and `Shift` holds your breath to steady the aim.
 - **Explode** – small, medium or huge explosions anywhere; clicking an explosive sets it off.
 - **Rope** – click two points to tie them. Tie a bunch of balloons to someone's hand.
 - **Force** – a blast of air that knocks things over.

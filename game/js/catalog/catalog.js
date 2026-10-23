@@ -6,6 +6,7 @@ import { SYRINGES } from './syringes.js';
 import { MACHINES } from './machines.js';
 import { ROCKETS } from './rockets.js';
 import { BUILDINGS } from './buildings.js';
+import { DRONE } from './drone.js';
 import { Prop } from '../entities/prop.js';
 import { Car } from '../entities/vehicle.js';
 
@@ -70,6 +71,7 @@ export const CATEGORIES = [
       propItem(PROPS.mine, { desc: 'Steps trigger it' }),
       propItem(ROCKETS.missile, { desc: 'G to launch · sticks to people' }),
       propItem(ROCKETS.firework, { desc: 'G to light' }),
+      propItem(DRONE, { desc: 'G: hunts the nearest person' }),
     ],
   },
   {

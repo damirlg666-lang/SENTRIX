@@ -70,6 +70,16 @@
 
     <div id="hint"></div>
     <div id="toast"></div>
+    <div id="scope" class="hidden">
+      <svg viewBox="-100 -100 200 200" aria-hidden="true">
+        <circle r="99" style="fill:none;stroke:#000;stroke-width:2.5"/>
+        <circle r="96" style="fill:none;stroke:rgba(120,160,190,0.18);stroke-width:6"/>
+        <path d="M-99 0H-12M12 0H99M0 -99V-12M0 12V99" style="fill:none;stroke:#000;stroke-width:0.6"/>
+        <path d="M-99 0H-55M55 0H99M0 99V55" style="fill:none;stroke:#000;stroke-width:3"/>
+        <g style="fill:#000;stroke:none"><circle cx="-24" r="1.1"/><circle cx="-36" r="1.1"/><circle cx="-48" r="1.1"/><circle cx="24" r="1.1"/><circle cx="36" r="1.1"/><circle cx="48" r="1.1"/><circle cy="24" r="1.1"/><circle cy="36" r="1.1"/><circle cy="48" r="1.1"/><circle cy="-24" r="1.1"/><circle cy="-36" r="1.1"/></g>
+        <circle r="0.9" style="fill:#d22;stroke:none"/>
+      </svg>
+    </div>
     <div id="hover-tip" class="hidden"><div class="ht-name"></div><div class="ht-bar"><i></i></div><div class="ht-state"></div><div class="ht-inj"></div></div>
     <div id="crosshair" class="hidden"></div>
     <div id="slowmo-badge" class="hidden">SLOW MOTION</div>
@@ -109,7 +119,7 @@
             <h3>Tools</h3>
             <p><kbd>1</kbd>–<kbd>9</kbd> select tool &nbsp;<kbd>Tab</kbd> spawn menu</p>
             <p><b>Hand</b>: drag anything. <kbd>Wheel</kbd> pull/push, <kbd>F</kbd> freeze in place while holding.</p>
-            <p><b>Weapons</b>: <kbd>Left mouse</kbd> fire, <kbd>R</kbd> next weapon. Includes knife, sword, axe, flamethrower and taser.</p>
+            <p><b>Weapons</b>: <kbd>Left mouse</kbd> fire, <kbd>R</kbd> next weapon. Includes knife, sword, axe, flamethrower and taser. Sniper rifle: hold <kbd>Right mouse</kbd> (or press <kbd>Z</kbd>) for the scope, <kbd>Wheel</kbd> zooms, <kbd>Shift</kbd> steadies.</p>
             <p><b>Rope</b>: click two points to tie them together.</p>
             <p><b>Control</b>: click a person, then <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk, <kbd>Shift</kbd> run, <kbd>Space</kbd> jump, click to punch.</p>
             <p><b>Spawning onto people</b>: knives, swords, syringes, thrusters and missiles placed on a person stick into them. <kbd>G</kbd> on a person switches them on; grab a stuck item to pull it out.</p>

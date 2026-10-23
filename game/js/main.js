@@ -67,6 +67,7 @@ function bindInput(game) {
   const canvas = game.gfx.renderer.domElement;
   let rotating = false;
   let panning = false;
+  let scopeByMouse = false;
   let lastX = 0;
   let lastY = 0;
   const touches = new Map();
@@ -114,7 +115,14 @@ function bindInput(game) {
     lastX = e.clientX;
     lastY = e.clientY;
     if (e.button === 0) tools.down();
-    else if (e.button === 2) rotating = true;
+    else if (e.button === 2) {
+      rotating = true;
+      // holding the right button with the sniper rifle looks through the scope
+      if (tools.canScope() && !tools.scoped) {
+        tools.setScope(true);
+        scopeByMouse = true;
+      }
+    }
     else if (e.button === 1) {
       panning = true;
       e.preventDefault();
@@ -157,7 +165,11 @@ function bindInput(game) {
       return;
     }
     if (e.button === 0) tools.up();
-    if (e.button === 2) rotating = false;
+    if (e.button === 2) {
+      rotating = false;
+      if (scopeByMouse) tools.setScope(false);
+      scopeByMouse = false;
+    }
     if (e.button === 1) panning = false;
   };
   canvas.addEventListener('pointerup', end);
@@ -210,6 +222,11 @@ function bindInput(game) {
     const n = parseInt(e.key);
     if (!isNaN(n) && n >= 1 && n <= TOOL_IDS.length && !e.ctrlKey && !e.metaKey) {
       tools.select(TOOL_IDS[n - 1]);
+      return;
+    }
+    if (e.code === 'KeyZ' && !e.ctrlKey && !e.metaKey && tools.canScope()) {
+      tools.setScope(!tools.scoped);
+      scopeByMouse = false;
       return;
     }
     if (tools.key(e.code)) return;
