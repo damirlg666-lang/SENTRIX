@@ -564,6 +564,7 @@ uniform vec3 uHair;
 uniform float uBeard;
 uniform vec2 uTrim;
 uniform float uBeltY;
+uniform vec3 uHeadC;
 varying vec2 vFace;
 varying vec3 vCloth;
 varying vec2 vMat;
@@ -572,6 +573,7 @@ varying vec2 vLayer2;
 varying vec2 vDamage;
 varying vec3 vBind;
 vec2 gMat;
+float gStrand;
 float h3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 float n3(vec3 p) {
   vec3 i = floor(p); vec3 f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -616,6 +618,21 @@ float burn = clamp(vDamage.y, 0.0, 1.0);
 col = mix(col, vec3(0.28, 0.015, 0.02), blood * 0.92);
 col *= 1.0 - burn * 0.82;
 gMat.x = mix(gMat.x, 0.22, blood * 0.85);
+// hair (and beards, brows): strands that fall away from the crown, in light and dark clumps
+gStrand = 0.5;
+if (gMat.y > 1.5 && gMat.y < 2.5) {
+  vec3 hp = vBind - uHeadC - vec3(0.0, 0.075, -0.02);
+  float az = atan(hp.x, hp.z);
+  float rr = max(length(hp.xz), 0.03);
+  float along = length(hp);
+  float fp2 = max(length(fwidth(vBind)), 1e-5);
+  float fine = n3(vec3(az * 110.0, along * 45.0, 1.3));
+  float clump = n3(vec3(az * 24.0, along * 12.0, 7.1));
+  float fade = 1.0 - smoothstep(0.15, 0.45, (110.0 / rr) * fp2);
+  gStrand = mix(0.5, fine, fade) * 0.6 + clump * 0.4;
+  col *= 0.62 + 0.76 * gStrand;
+  gMat.x *= 0.8 + 0.4 * (1.0 - gStrand);
+}
 // inside of the body, visible through wounds once a limb is gone (double-sided material)
 if (!gl_FrontFacing) { col = vec3(0.3, 0.025, 0.025); gMat = vec2(0.45, 0.0); }
 diffuseColor.rgb *= col;`;
@@ -629,8 +646,7 @@ const FRAG_DETAIL = `#include <normal_fragment_maps>
     hgt = 0.0016 * n3(vBind * vec3(16.0, 34.0, 16.0)) * (1.0 - smoothstep(0.15, 0.45, 34.0 * fp));
     hgt += 0.00012 * n3(vBind * 380.0) * (1.0 - smoothstep(0.15, 0.45, 380.0 * fp));
   } else if (det > 1.5 && det < 2.5) {
-    hgt = 0.00022 * n3(vBind * vec3(700.0, 60.0, 700.0)) * (1.0 - smoothstep(0.15, 0.45, 700.0 * fp));
-    hgt += 0.0009 * n3(vBind * vec3(110.0, 20.0, 110.0)) * (1.0 - smoothstep(0.15, 0.45, 110.0 * fp));
+    hgt = 0.0009 * gStrand;
   } else if (det > 2.5 && det < 3.5) {
     hgt = 0.0013 * n3(vBind * vec3(14.0, 28.0, 14.0)) * (1.0 - smoothstep(0.15, 0.45, 28.0 * fp));
     hgt += 0.00011 * n3(vBind * vec3(520.0, 260.0, 520.0)) * (1.0 - smoothstep(0.15, 0.45, 520.0 * fp));
@@ -684,12 +700,13 @@ export function makeCharacterMaterial(outfit) {
     uBeard: { value: outfit.beard === 'stubble' ? 0.3 : outfit.beard === 'none' ? 0 : 1 },
     uTrim: { value: trimWidths(outfit) },
     uBeltY: { value: beltHeight(outfit) },
+    uHeadC: { value: new THREE.Vector3(...makeSkeleton(outfit.bodyType || 'male').j.headC) },
   };
   m.onBeforeCompile = function (shader) {
     Object.assign(shader.uniforms, this.userData.uniforms);
     patchShader(shader);
   };
-  m.customProgramCacheKey = () => 'ragdoll-character-v6';
+  m.customProgramCacheKey = () => 'ragdoll-character-v7';
   return m;
 }
 

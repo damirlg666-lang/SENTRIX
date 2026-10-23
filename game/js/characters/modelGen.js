@@ -144,17 +144,18 @@ function handModel() {
   m.add(roundCone([0, 0.03, 0], [0, -0.012, 0], 0.029, 0.026), { ...o, k: 0.012 });
   m.add(roundBox([0.0, -0.05, 0.0], [0.0135, 0.046, 0.04], 0.012), { ...o, k: 0.012 });
   m.add(ellipsoid([-0.008, -0.034, 0.025], [0.012, 0.026, 0.017]), { ...o, k: 0.012 });
-  const zs = [0.0285, 0.0095, -0.0095, -0.0275];
+  // fingers far enough apart (and fanned out a little) that they stay separate at mesh resolution
+  const zs = [0.032, 0.011, -0.011, -0.0305];
   const lens = [0.072, 0.08, 0.075, 0.06];
-  const rads = [0.0088, 0.009, 0.0086, 0.0077];
+  const rads = [0.008, 0.0083, 0.0079, 0.007];
   for (let i = 0; i < 4; i++) {
     const base = [0.0015, -0.088 + (i === 3 ? 0.006 : 0), zs[i]];
-    const d1 = norm([-0.16, -1, zs[i] * 1.6]);
-    const d2 = norm([-0.6, -0.8, zs[i] * 1.2]);
+    const d1 = norm([-0.16, -1, zs[i] * 3]);
+    const d2 = norm([-0.6, -0.8, zs[i] * 2.2]);
     const e1 = add(base, sc(d1, lens[i] * 0.55));
     const e2 = add(e1, sc(d2, lens[i] * 0.45));
-    m.add(roundCone(base, e1, rads[i], rads[i] * 0.93), { ...o, k: 0.005 });
-    m.add(roundCone(e1, e2, rads[i] * 0.93, rads[i] * 0.8), { ...o, k: 0.004 });
+    m.add(roundCone(base, e1, rads[i], rads[i] * 0.93), { ...o, k: 0.003 });
+    m.add(roundCone(e1, e2, rads[i] * 0.93, rads[i] * 0.8), { ...o, k: 0.002 });
   }
   const tb = [-0.007, -0.03, 0.03];
   const t1 = add(tb, sc(norm([-0.35, -0.62, 0.55]), 0.04));
