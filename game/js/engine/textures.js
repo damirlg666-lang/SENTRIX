@@ -92,12 +92,12 @@ export function concrete(size = 1024) {
         const ly = (y % slabPx) / slabPx;
         const edge = Math.min(lx, 1 - lx, ly, 1 - ly) * 2; // meters to seam
         const seam = 1 - smoothstep(0.0035, 0.009, edge);
-        const blotch = fbm(u * 6, v * 6, 4, 6, 3);
+        const blotch = fbm(u * 6, v * 6, 3, 6, 3);
         const fine = fbm(u * 64, v * 64, 3, 64, 11);
         const grain = valueNoise(u * 420, v * 420, 420, 5);
-        const crack = ridged(u * 9 + 0.3, v * 9, 4, 9, 21);
+        const crack = ridged(u * 9 + 0.3, v * 9, 3, 9, 21);
         const crackLine = smoothstep(0.93, 0.985, crack) * smoothstep(0.45, 0.7, fbm(u * 3, v * 3, 2, 3, 41));
-        const stain = smoothstep(0.58, 0.8, fbm(u * 4 + 5, v * 4, 5, 4, 77));
+        const stain = smoothstep(0.58, 0.8, fbm(u * 4 + 5, v * 4, 3, 4, 77));
         const pit = grain > 0.93 ? 1 : 0;
         let base = 0.5 + slabTone[sy * slabs + sx] + (blotch - 0.5) * 0.16 + (fine - 0.5) * 0.06 + (grain - 0.5) * 0.05;
         base -= stain * 0.12;
@@ -119,70 +119,97 @@ export function concrete(size = 1024) {
   });
 }
 
-/** Grass ground texture drawn with thousands of blade strokes. */
+/** Grass ground texture: noise base plus tens of thousands of rasterised grass blades. */
 export function grass(size = 1024) {
   return memo('grass' + size, () => {
-    const c = document.createElement('canvas');
-    c.width = c.height = size;
-    const g = c.getContext('2d');
-    // base layer from noise
-    const img = g.createImageData(size, size);
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        const u = x / size;
-        const v = y / size;
-        const n = fbm(u * 8, v * 8, 5, 8, 9);
-        const dirt = smoothstep(0.62, 0.78, fbm(u * 3 + 2, v * 3, 4, 3, 13));
-        const i = (y * size + x) * 4;
-        const gr = [52 + n * 40, 84 + n * 50, 30 + n * 18];
-        const dr = [96 + n * 30, 78 + n * 24, 52 + n * 16];
-        img.data[i] = gr[0] + (dr[0] - gr[0]) * dirt;
-        img.data[i + 1] = gr[1] + (dr[1] - gr[1]) * dirt;
-        img.data[i + 2] = gr[2] + (dr[2] - gr[2]) * dirt;
-        img.data[i + 3] = 255;
+    const N = size * size;
+    const r = new Float32Array(N);
+    const g = new Float32Array(N);
+    const b = new Float32Array(N);
+    // base colour from noise evaluated at quarter resolution and upsampled
+    const q = size / 4;
+    const base = new Float32Array(q * q * 2);
+    for (let y = 0; y < q; y++) {
+      for (let x = 0; x < q; x++) {
+        base[(y * q + x) * 2] = fbm((x / q) * 8, (y / q) * 8, 5, 8, 9);
+        base[(y * q + x) * 2 + 1] = smoothstep(0.62, 0.78, fbm((x / q) * 3 + 2, (y / q) * 3, 4, 3, 13));
       }
     }
-    g.putImageData(img, 0, 0);
+    for (let y = 0; y < size; y++) {
+      const fy = (y / 4) % q;
+      const y0 = Math.floor(fy), y1 = (y0 + 1) % q, ty = fy - y0;
+      for (let x = 0; x < size; x++) {
+        const fx = (x / 4) % q;
+        const x0 = Math.floor(fx), x1 = (x0 + 1) % q, tx = fx - x0;
+        const s = (k) => {
+          const a = base[(y0 * q + x0) * 2 + k] * (1 - tx) + base[(y0 * q + x1) * 2 + k] * tx;
+          const c = base[(y1 * q + x0) * 2 + k] * (1 - tx) + base[(y1 * q + x1) * 2 + k] * tx;
+          return a * (1 - ty) + c * ty;
+        };
+        const n = s(0);
+        const dirt = s(1);
+        const i = y * size + x;
+        r[i] = ((52 + n * 40) * (1 - dirt) + (96 + n * 30) * dirt) / 255;
+        g[i] = ((84 + n * 50) * (1 - dirt) + (78 + n * 24) * dirt) / 255;
+        b[i] = ((30 + n * 18) * (1 - dirt) + (52 + n * 16) * dirt) / 255;
+      }
+    }
+    // blades: short curved strokes rasterised with wrap-around so the tile stays seamless
     const rnd = mulberry32(42);
-    const blades = Math.round(size * size * 0.06);
-    g.lineCap = 'round';
+    const blades = Math.round(N * 0.06);
+    const c = new THREE.Color();
     for (let k = 0; k < blades; k++) {
-      const x = rnd() * size;
-      const y = rnd() * size;
+      let x = rnd() * size;
+      let y = rnd() * size;
       const len = 3 + rnd() * size * 0.012;
       const ang = rnd() * Math.PI * 2;
-      const shade = rnd();
-      const hue = 78 + rnd() * 30;
-      const light = 18 + shade * 30;
-      g.strokeStyle = `hsla(${hue}, ${45 + rnd() * 25}%, ${light}%, ${0.55 + rnd() * 0.4})`;
-      g.lineWidth = 0.8 + rnd() * 1.6;
-      const dx = Math.cos(ang) * len;
-      const dy = Math.sin(ang) * len;
-      for (const ox of [0, -size, size]) {
-        for (const oy of [0, -size, size]) {
-          const px = x + ox;
-          const py = y + oy;
-          if (px + len < 0 || px - len > size || py + len < 0 || py - len > size) continue;
-          g.beginPath();
-          g.moveTo(px, py);
-          g.quadraticCurveTo(px + dx * 0.5 + dy * 0.2, py + dy * 0.5 - dx * 0.2, px + dx, py + dy);
-          g.stroke();
+      const bend = (rnd() - 0.5) * 0.8;
+      const hue = (78 + rnd() * 30) / 360;
+      const sat = 0.45 + rnd() * 0.25;
+      const light = 0.18 + rnd() * 0.3;
+      c.setHSL(hue, sat, light, THREE.LinearSRGBColorSpace); // no conversion: values stay sRGB-encoded like the base
+      const cr = c.r, cg = c.g, cb = c.b;
+      const alpha = 0.55 + rnd() * 0.4;
+      const wide = rnd() < 0.5;
+      const steps = Math.ceil(len);
+      let dx = Math.cos(ang);
+      let dy = Math.sin(ang);
+      for (let s2 = 0; s2 < steps; s2++) {
+        const t = s2 / steps;
+        const a = alpha * (1 - t * 0.5);
+        for (let w = 0; w < (wide ? 2 : 1); w++) {
+          const px = ((Math.floor(x + (w ? -dy : 0)) % size) + size) % size;
+          const py = ((Math.floor(y + (w ? dx : 0)) % size) + size) % size;
+          const i = py * size + px;
+          r[i] += (cr - r[i]) * a;
+          g[i] += (cg - g[i]) * a;
+          b[i] += (cb - b[i]) * a;
         }
+        x += dx;
+        y += dy;
+        // curve the blade gradually
+        const ca = Math.cos(bend / steps), sa = Math.sin(bend / steps);
+        const ndx = dx * ca - dy * sa;
+        dy = dx * sa + dy * ca;
+        dx = ndx;
       }
     }
-    // derive height + roughness from luminance
-    const data = g.getImageData(0, 0, size, size).data;
-    const h = new Float32Array(size * size);
-    const r = new Float32Array(size * size);
-    for (let i = 0; i < size * size; i++) {
-      const l = (data[i * 4] * 0.3 + data[i * 4 + 1] * 0.6 + data[i * 4 + 2] * 0.1) / 255;
+    const col = new Uint8Array(N * 4);
+    const h = new Float32Array(N);
+    const rough = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      col[i * 4] = clamp(r[i], 0, 1) * 255;
+      col[i * 4 + 1] = clamp(g[i], 0, 1) * 255;
+      col[i * 4 + 2] = clamp(b[i], 0, 1) * 255;
+      col[i * 4 + 3] = 255;
+      const l = r[i] * 0.3 + g[i] * 0.6 + b[i] * 0.1;
       h[i] = l;
-      r[i] = 0.92 - l * 0.25;
+      rough[i] = 0.92 - l * 0.25;
     }
     return {
-      map: canvasTexture(c, true),
+      map: dataTexture(col, size, true),
       normalMap: dataTexture(heightToNormal(h, size, 3.0), size, false),
-      roughnessMap: dataTexture(grayToRGBA(r, size), size, false),
+      roughnessMap: dataTexture(grayToRGBA(rough, size), size, false),
     };
   });
 }
@@ -252,8 +279,8 @@ export function paintedMetal(size = 512, seed = 1) {
         const v = y / size;
         const n = fbm(u * 8, v * 8, 4, 8, seed);
         const scratch = smoothstep(0.965, 0.995, ridged(u * 30, v * 4, 3, 30, seed + 4)) * smoothstep(0.4, 0.6, fbm(u * 4, v * 4, 2, 4, seed + 9));
-        const rust = smoothstep(0.68, 0.82, fbm(u * 5 + 3, v * 5, 5, 5, seed + 13));
-        const dirt = fbm(u * 3, v * 12, 3, 3, seed + 21);
+        const rust = smoothstep(0.68, 0.82, fbm(u * 5 + 3, v * 5, 3, 5, seed + 13));
+        const dirt = fbm(u * 3, v * 12, 2, 3, seed + 21);
         const i = y * size + x;
         let c = 0.92 + (n - 0.5) * 0.12 - dirt * 0.12;
         let cr = c, cg = c, cb = c;

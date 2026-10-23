@@ -72,41 +72,64 @@ class WorkerPool {
   }
 }
 
-/** Generate all character parts for a quality level, in parallel worker threads when possible. */
+const ESSENTIAL_HAIR = ['short', 'long'];
+
+/**
+ * Generate character parts for a quality level in parallel worker threads (main-thread fallback).
+ * Resolves once everything needed to spawn people exists; the remaining hair styles keep
+ * generating in the background.
+ */
 export async function prepareModels(quality, onProgress) {
-  const jobs = [];
-  for (const type of Object.keys(BODY_TYPES)) jobs.push({ kind: 'body', type, quality });
-  jobs.push({ kind: 'head', female: false, quality }, { kind: 'head', female: true, quality }, { kind: 'hand', quality });
-  for (const style of HAIR_STYLES) if (style !== 'bald') jobs.push({ kind: 'hair', style, quality });
-  const todo = jobs.filter((j) => !parts.has(jobKey(j)));
-  if (!todo.length) return;
+  const essential = [];
+  const deferred = [];
+  for (const type of Object.keys(BODY_TYPES)) essential.push({ kind: 'body', type, quality });
+  essential.push({ kind: 'head', female: false, quality }, { kind: 'head', female: true, quality }, { kind: 'hand', quality });
+  for (const style of HAIR_STYLES) {
+    if (style === 'bald') continue;
+    (ESSENTIAL_HAIR.includes(style) ? essential : deferred).push({ kind: 'hair', style, quality });
+  }
+  const todo = essential.filter((j) => !parts.has(jobKey(j)));
+  const later = deferred.filter((j) => !parts.has(jobKey(j)));
+  if (!todo.length && !later.length) return;
   let pool = null;
   try {
     if (typeof Worker !== 'undefined') pool = new WorkerPool(Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 4) - 1)));
   } catch (e) {
     console.warn('Model workers unavailable, generating on main thread', e);
   }
-  let done = 0;
-  await Promise.all(
-    todo.map(async (job) => {
-      let out;
-      if (pool) {
-        try {
-          out = await pool.run(job);
-        } catch (e) {
-          console.warn('worker job failed, falling back', e);
-          out = runJob(job);
-        }
-      } else {
-        await new Promise((r) => setTimeout(r, 0));
+  const run = async (job) => {
+    let out;
+    if (pool) {
+      try {
+        out = await pool.run(job);
+      } catch (e) {
+        console.warn('worker job failed, falling back', e);
         out = runJob(job);
       }
-      parts.set(jobKey(job), out);
-      done++;
-      onProgress?.(done / todo.length);
-    })
+    } else {
+      await new Promise((r) => setTimeout(r, 0));
+      out = runJob(job);
+    }
+    parts.set(jobKey(job), out);
+  };
+  let done = 0;
+  const essentialDone = Promise.all(
+    todo.map((job) =>
+      run(job).then(() => {
+        done++;
+        onProgress?.(done / todo.length);
+      })
+    )
   );
-  pool?.terminate();
+  // queued after the essentials, so they never delay start-up
+  const backgroundDone = Promise.all(later.map(run));
+  backgroundDone.finally(() => pool?.terminate());
+  await essentialDone;
+}
+
+/** True when the hair geometry for a style is ready (or the style has no hair). */
+export function hairReady(style, quality) {
+  return style === 'bald' || parts.has(jobKey({ kind: 'hair', style, quality }));
 }
 
 function getPart(job) {
@@ -688,6 +711,7 @@ function lidGeometry(skinHex) {
  * skinned mesh, eyes and eyelids.
  */
 export function createCharacterMesh(type, outfit, quality = 'high') {
+  if (!hairReady(outfit.hairStyle, quality)) outfit.hairStyle = outfit.female ? 'long' : 'short';
   const tpl = getTemplate(type, outfit.hairStyle, quality);
   const sk = tpl.sk;
   const painted = paintCharacter(tpl, outfit);

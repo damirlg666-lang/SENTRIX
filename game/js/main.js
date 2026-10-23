@@ -15,7 +15,11 @@ const loadFill = document.getElementById('load-fill');
 const loadText = document.getElementById('load-text');
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
 
+const bootStart = performance.now();
+const timings = [];
+
 async function progress(text, frac) {
+  if (text) timings.push([text, Math.round(performance.now() - bootStart)]);
   if (text) loadText.textContent = text;
   if (frac !== undefined) loadFill.style.width = Math.round(frac * 100) + '%';
   await nextFrame();
@@ -242,12 +246,17 @@ async function main() {
   window.__game = game;
   window.__debug = { PROPS, THREE };
 
+  // characters are sculpted in worker threads while the main thread builds the world
+  let modelProgress = 0;
+  const models = prepareModels(game.modelQuality, (f) => (modelProgress = f));
   await progress('Building the world…', 0.1);
   game.buildWorld((t) => (loadText.textContent = t));
   game.map.setCloudCover(game.settings.time === 'overcast' ? 0.25 : 0.5);
 
-  await progress('Sculpting people…', 0.3);
-  await prepareModels(game.modelQuality, (f) => progress(null, 0.3 + f * 0.45));
+  await progress('Sculpting people…', 0.3 + modelProgress * 0.45);
+  const tick = setInterval(() => (loadFill.style.width = Math.round((0.3 + modelProgress * 0.45) * 100) + '%'), 100);
+  await models;
+  clearInterval(tick);
 
   game.fx = new Effects(game);
   game.audio = new Audio(game);
@@ -264,6 +273,7 @@ async function main() {
   game.ready = true;
 
   await progress('Ready', 1);
+  if (params.has('debug')) console.log('boot timings (ms):', JSON.stringify(timings), 'world:', game.map.buildTimings.join(', '));
   document.getElementById('loading').classList.add('fade');
   document.getElementById('hud').classList.remove('hidden');
 

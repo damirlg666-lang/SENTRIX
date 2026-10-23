@@ -324,45 +324,28 @@ export function meshSDF(model, min, max, cell) {
     }
   }
 
-  // project vertices onto the surface and compute analytic normals
+  // one Newton step projects each vertex onto the surface; its gradient doubles as the normal
   const nv = positions.length / 3;
   const pos = new Float32Array(positions);
   const nrm = new Float32Array(nv * 3);
   const e = cell * 0.35;
   for (let v = 0; v < nv; v++) {
-    let x = pos[v * 3], y = pos[v * 3 + 1], z = pos[v * 3 + 2];
-    for (let it = 0; it < 2; it++) {
-      const d = f(x, y, z);
-      const gx = f(x + e, y, z) - f(x - e, y, z);
-      const gy = f(x, y + e, z) - f(x, y - e, z);
-      const gz = f(x, y, z + e) - f(x, y, z - e);
-      const gl = Math.sqrt(gx * gx + gy * gy + gz * gz) / (2 * e);
-      if (gl < 1e-6) break;
-      const inv = 1 / (gl * 2 * e);
-      const step = Math.max(-cell * 0.6, Math.min(cell * 0.6, d / gl));
-      x -= gx * inv * step;
-      y -= gy * inv * step;
-      z -= gz * inv * step;
-      if (it === 1) {
-        nrm[v * 3] = gx * inv;
-        nrm[v * 3 + 1] = gy * inv;
-        nrm[v * 3 + 2] = gz * inv;
-      }
-    }
-    pos[v * 3] = x;
-    pos[v * 3 + 1] = y;
-    pos[v * 3 + 2] = z;
-  }
-  // recompute normals at final positions
-  for (let v = 0; v < nv; v++) {
     const x = pos[v * 3], y = pos[v * 3 + 1], z = pos[v * 3 + 2];
-    let gx = f(x + e, y, z) - f(x - e, y, z);
-    let gy = f(x, y + e, z) - f(x, y - e, z);
-    let gz = f(x, y, z + e) - f(x, y, z - e);
-    const l = Math.sqrt(gx * gx + gy * gy + gz * gz) || 1;
-    nrm[v * 3] = gx / l;
-    nrm[v * 3 + 1] = gy / l;
-    nrm[v * 3 + 2] = gz / l;
+    const d = f(x, y, z);
+    const gx = f(x + e, y, z) - f(x - e, y, z);
+    const gy = f(x, y + e, z) - f(x, y - e, z);
+    const gz = f(x, y, z + e) - f(x, y, z - e);
+    const l = Math.sqrt(gx * gx + gy * gy + gz * gz);
+    if (l < 1e-9) continue;
+    const nx = gx / l, ny = gy / l, nz = gz / l;
+    const grad = l / (2 * e);
+    const step = Math.max(-cell * 0.6, Math.min(cell * 0.6, d / grad));
+    pos[v * 3] = x - nx * step;
+    pos[v * 3 + 1] = y - ny * step;
+    pos[v * 3 + 2] = z - nz * step;
+    nrm[v * 3] = nx;
+    nrm[v * 3 + 1] = ny;
+    nrm[v * 3 + 2] = nz;
   }
   // split quads along the better diagonal
   const ind = new Uint32Array(indices);

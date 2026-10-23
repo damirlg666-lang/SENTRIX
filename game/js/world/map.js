@@ -46,10 +46,19 @@ export class WorldMap {
   }
 
   build(progress = () => {}) {
+    const t = [];
+    let last = performance.now();
+    const mark = (name) => {
+      const now = performance.now();
+      t.push(`${name} ${Math.round(now - last)}ms`);
+      last = now;
+    };
     progress('Laying concrete…');
     this.materials();
+    mark('materials');
     progress('Growing terrain…');
     this.buildTerrain();
+    mark('terrain');
     this.buildPlaza();
     progress('Building structures…');
     this.buildTower(13, -11);
@@ -59,9 +68,12 @@ export class WorldMap {
     this.buildBarriers();
     this.buildLamps();
     this.buildBenches();
+    mark('structures');
     progress('Planting trees…');
     this.buildVegetation();
     this.buildClouds();
+    mark('vegetation');
+    this.buildTimings = t;
   }
 
   // ---------------------------------------------------------------- materials
