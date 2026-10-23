@@ -11,6 +11,7 @@ import {
   initInjuries, legsDisabled, injuryText, bulletTrauma, impactTrauma, checkTearing, updateSpurts, healInjuries, fatalLoss,
 } from './injury.js';
 import { initChem, updateChem, chemBoost, chemStatus, clearChem } from './chem.js';
+import { initReactions, react, applyReactions, staggerVelocity, onDeath } from './reactions.js';
 
 export const ST = {
   ACTIVE: 'active',
@@ -136,6 +137,7 @@ export class Person extends Entity {
     this.standH = this.sk.centers[B.PELVIS][1] - 0.015;
     initInjuries(this);
     initChem(this);
+    initReactions(this);
 
     if (!opts.headless) {
       this.ch = createCharacterMesh(type, this.outfit, opts.quality || 'high');
@@ -300,8 +302,11 @@ export class Person extends Entity {
     switch (this.state) {
       case ST.ACTIVE: {
         const v = pel.linvel();
-        const slip = Math.hypot(v.x - Math.sin(this.heading) * this.desiredSpeed, v.z - Math.cos(this.heading) * this.desiredSpeed);
-        this.slip = slip > 2.0 && this.stateTime > 0.6 ? (this.slip || 0) + dt : 0;
+        // (being knocked back by a hit is expected movement, not slipping)
+        const st = this.stagger;
+        const slip = Math.hypot(v.x - Math.sin(this.heading) * this.desiredSpeed - (st?.x ?? 0), v.z - Math.cos(this.heading) * this.desiredSpeed - (st?.z ?? 0));
+        // running people turn sharply, so they get more leeway before it counts as slipping
+        this.slip = slip > 2.0 + 0.4 * this.desiredSpeed && this.stateTime > 0.6 ? (this.slip || 0) + dt : 0;
         const airLimit = this.jumpTime > 0 ? 1.4 : 0.35;
         if (tilt > 0.85 || (this.height < this.standH * 0.62 && this.jumpTime <= 0) || this.stun > 0.6 || (this.airTime > airLimit && !this.held) || this.slip > 0.1) {
           this.fall();
@@ -380,14 +385,18 @@ export class Person extends Entity {
         break;
       }
       case ST.UNCONSCIOUS:
+        lerpPose(p, POSE_PROTECT, POSE_STAND, 0.6);
         strength = 0.03;
         break;
       case ST.DEAD:
+        lerpPose(p, POSE_PROTECT, POSE_STAND, 0.6);
         strength = Math.max(0, 0.3 - this.stateTime * 0.6);
         break;
       default:
         break;
     }
+    const rs = applyReactions(this, p, dt);
+    if (rs !== null) strength = rs;
     // electrocution: every muscle fires at random (dead bodies twitch too)
     if (this.shockTime > 0) {
       this.shockTime -= dt;
@@ -454,8 +463,10 @@ export class Person extends Entity {
 
     // horizontal drive toward desired velocity
     if (this.state === ST.ACTIVE) {
-      const dvx = Math.sin(this.heading) * this.desiredSpeed - pv.x;
-      const dvz = Math.cos(this.heading) * this.desiredSpeed - pv.z;
+      // a hit knocks people back a step or two
+      const sv = staggerVelocity(this, dt);
+      const dvx = Math.sin(this.heading) * this.desiredSpeed + (sv ? sv.x : 0) - pv.x;
+      const dvz = Math.cos(this.heading) * this.desiredSpeed + (sv ? sv.z : 0) - pv.z;
       const maxA = 4;
       let ax = dvx * 4;
       let az = dvz * 4;
@@ -785,6 +796,7 @@ export class Person extends Entity {
     this.setState(ST.DEAD);
     this.deathTime = 0;
     this.cause = cause;
+    onDeath(this, cause);
     this.game.events?.emit('death', this);
   }
 
@@ -810,6 +822,7 @@ export class Person extends Entity {
     this.pain = Math.min(1, this.pain + dmg / 45);
     this.stun += dmg / (info.kind === 'bullet' ? 45 : 30);
     this.lastHit = this.time;
+    react(this, part, info.point, info.dir, dmg, info.kind);
     if (info.kind === 'bullet' || info.kind === 'cut') {
       if (!this.dummy) this.bleed += dmg * 0.05 * (info.bleed ?? 1);
       if (info.point) this.addWound(part, info.point);
