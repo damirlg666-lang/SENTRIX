@@ -613,6 +613,8 @@ float burn = clamp(vDamage.y, 0.0, 1.0);
 col = mix(col, vec3(0.28, 0.015, 0.02), blood * 0.92);
 col *= 1.0 - burn * 0.82;
 gMat.x = mix(gMat.x, 0.22, blood * 0.85);
+// inside of the body, visible through wounds once a limb is gone (double-sided material)
+if (!gl_FrontFacing) { col = vec3(0.3, 0.025, 0.025); gMat = vec2(0.45, 0.0); }
 diffuseColor.rgb *= col;`;
 
 const FRAG_DETAIL = `#include <normal_fragment_maps>
@@ -684,7 +686,7 @@ export function makeCharacterMaterial(outfit) {
     Object.assign(shader.uniforms, this.userData.uniforms);
     patchShader(shader);
   };
-  m.customProgramCacheKey = () => 'ragdoll-character-v5';
+  m.customProgramCacheKey = () => 'ragdoll-character-v6';
   return m;
 }
 
@@ -807,7 +809,12 @@ export function paintDamage(ch, bone, worldPoint, radius, amount, channel = 0) {
   const c = tpl.sk.centers[bone];
   _m.copy(ch.bones[bone].matrixWorld).invert();
   _p.copy(worldPoint).applyMatrix4(_m);
-  const bx = _p.x + c[0], by = _p.y + c[1], bz = _p.z + c[2];
+  return paintBind(ch, _p.x + c[0], _p.y + c[1], _p.z + c[2], radius, amount, channel);
+}
+
+/** Paint damage around a point given in bind-pose (model) space. */
+export function paintBind(ch, bx, by, bz, radius, amount, channel = 0) {
+  const tpl = ch.template;
   const pos = ch.geometry.attributes.position.array;
   const dmg = ch.damage.array;
   const r2 = radius * radius;

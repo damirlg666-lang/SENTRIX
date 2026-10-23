@@ -404,6 +404,59 @@ export class Audio {
     osc.stop(t + 0.1);
   }
 
+  /** Bone snapping: a dry, bright crack with a short woody knock. */
+  crack(pos) {
+    if (!this.canPlay()) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const R = 1 / this.rate;
+    const o = this.out(pos, 0.7, 0.1);
+    for (let i = 0; i < 2; i++) {
+      const t0 = t + i * rnd(0.012, 0.03) * R;
+      const n = this.noiseSrc(0.06);
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'bandpass';
+      hp.frequency.value = rnd(2200, 3600) * this.rate;
+      hp.Q.value = 1.5;
+      const g = ctx.createGain();
+      this.env(g, t0, 0.001, i ? 0.5 : 1, 0.035 * R);
+      n.connect(hp);
+      hp.connect(g);
+      g.connect(o);
+    }
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(900 * this.rate, t);
+    osc.frequency.exponentialRampToValueAtTime(240 * this.rate, t + 0.05 * R);
+    const og = ctx.createGain();
+    this.env(og, t, 0.001, 0.5, 0.06 * R);
+    osc.connect(og);
+    og.connect(o);
+    osc.start(t);
+    osc.stop(t + 0.1 * R);
+  }
+
+  /** Wet tearing for dismemberment: a crack buried in a low, squelchy noise burst. */
+  gore(pos, strength = 1) {
+    if (!this.canPlay()) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const R = 1 / this.rate;
+    const o = this.out(pos, 0.8 * strength, 0.15);
+    const n = this.noiseSrc(0.4);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.Q.value = 6;
+    lp.frequency.setValueAtTime(1400 * this.rate, t);
+    lp.frequency.exponentialRampToValueAtTime(180 * this.rate, t + 0.3 * R);
+    const g = ctx.createGain();
+    this.env(g, t, 0.004, 1, 0.32 * R);
+    n.connect(lp);
+    lp.connect(g);
+    g.connect(o);
+    this.crack(pos);
+  }
+
   whoosh(pos, strength = 1) {
     if (!this.canPlay()) return;
     const ctx = this.ctx;

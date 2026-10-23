@@ -160,13 +160,56 @@ export class Ragdoll {
       def.c *= this.totalMass / 75;
       def.joint = joint;
       def.handle = h;
+      def.a1 = a1;
+      def.a2 = a2;
       def.axes = def.hinge ? [AX.X] : [AX.X, AX.Y, AX.Z];
       def.last = [NaN, NaN, NaN, NaN];
       this.joints.push(joint);
     }
     // extra non-adjacent pairs that should not collide (they overlap at the bind pose)
     this.handles = new Set(this.colliders.map((c) => c.handle));
+    // per-joint muscle tone multiplier (broken bones and severed limbs go slack)
+    this.tone = new Float32Array(BONE_COUNT).fill(1);
     this.alive = true;
+  }
+
+  jointDef(child) {
+    return this.jointDefs.find((d) => d.child === child);
+  }
+
+  /** Widen (fractured) or restore a joint's limits. */
+  setLoose(child, loose) {
+    const def = this.jointDef(child);
+    if (!def || def.severed) return;
+    const w = loose ? 0.75 : 0;
+    const h = def.handle;
+    this.raw.jointSetLimits(h, AX.X, def.lim.x[0] - w * 1.2, def.lim.x[1] + w * 0.5);
+    if (!def.hinge) {
+      this.raw.jointSetLimits(h, AX.Y, def.lim.y[0] - w, def.lim.y[1] + w);
+      this.raw.jointSetLimits(h, AX.Z, def.lim.z[0] - w, def.lim.z[1] + w);
+    }
+    def.last[3] = NaN;
+    this.bodies[child].wakeUp();
+  }
+
+  /**
+   * Cut the joint above `child`. A long slack rope replaces it: it never pulls, but it keeps
+   * contacts disabled between the two cut faces, which overlap and would otherwise fly apart.
+   */
+  sever(child) {
+    const def = this.jointDef(child);
+    if (!def || def.severed) return false;
+    const world = this.physics.world;
+    const parent = this.bodies[PARENT[child]];
+    const body = this.bodies[child];
+    if (def.joint.isValid()) world.removeImpulseJoint(def.joint, true);
+    const rope = world.createImpulseJoint(R.JointData.rope(100, def.a1, def.a2), parent, body, true);
+    rope.setContactsEnabled(false);
+    def.joint = rope;
+    def.severed = true;
+    parent.wakeUp();
+    body.wakeUp();
+    return true;
   }
 
   /**
@@ -177,9 +220,11 @@ export class Ragdoll {
    */
   drive(pose, strength, perJoint = null) {
     const raw = this.raw;
+    const tone = this.tone;
     for (const def of this.jointDefs) {
+      if (def.severed) continue;
       const t = pose[def.child] || ZERO;
-      const s = strength * (perJoint ? perJoint[def.child] ?? 1 : 1);
+      const s = strength * tone[def.child] * (perJoint ? perJoint[def.child] ?? 1 : 1);
       const k = def.k * s;
       // a little residual damping keeps limp bodies from jittering
       const c = def.c * (0.06 + 0.94 * Math.min(1, s * 1.5));

@@ -395,7 +395,8 @@ button {
 .ht-bar { margin-top: 5px; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
 .ht-bar i { display: block; height: 100%; width: 100%; background: var(--good); transition: width 0.2s; }
 .ht-state { margin-top: 4px; color: var(--muted); font-size: 11px; }
-.ht-state:empty, .ht-bar.hidden { display: none; }
+.ht-inj { margin-top: 3px; color: #ff8a7a; font-size: 11px; max-width: 220px; }
+.ht-state:empty, .ht-inj:empty, .ht-bar.hidden { display: none; }
 
 #crosshair {
   position: fixed;

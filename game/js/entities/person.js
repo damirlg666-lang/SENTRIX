@@ -7,6 +7,9 @@ import { GROUPS } from '../engine/physics.js';
 import { B, BONE_COUNT, BONE_NAMES, makeSkeleton } from '../characters/skeleton.js';
 import { Ragdoll } from '../characters/ragdoll.js';
 import { createCharacterMesh, randomOutfit, dummyOutfit, paintDamage, clearDamage } from '../characters/humanModel.js';
+import {
+  initInjuries, legsDisabled, injuryText, bulletTrauma, impactTrauma, checkTearing, updateSpurts, healInjuries, fatalLoss,
+} from './injury.js';
 
 export const ST = {
   ACTIVE: 'active',
@@ -130,6 +133,7 @@ export class Person extends Entity {
     this.bodies = this.ragdoll.bodies;
     this.mass = this.ragdoll.totalMass;
     this.standH = this.sk.centers[B.PELVIS][1] - 0.015;
+    initInjuries(this);
 
     if (!opts.headless) {
       this.ch = createCharacterMesh(type, this.outfit, opts.quality || 'high');
@@ -236,7 +240,8 @@ export class Person extends Entity {
       pv[i * 3] = v.x;
       pv[i * 3 + 1] = v.y;
       pv[i * 3 + 2] = v.z;
-      const m = rd.masses[i];
+      // parts that came off no longer move the body's centre of mass
+      const m = this.attached[i] ? rd.masses[i] : 0;
       cx += v.x * m;
       cy += v.y * m;
       cz += v.z * m;
@@ -261,6 +266,9 @@ export class Person extends Entity {
       if (this.joltPeak > 5) this.stun += 1;
       this.joltPeak = 0;
     }
+    // limbs only tear when something holds the body back (a dragged body just follows the hand)
+    if (this.tethered || this.frozenParts > 0 || this.tearWatch > 0) checkTearing(this, dt);
+    this.tearWatch -= dt;
 
     const pel = rd.bodies[B.PELVIS];
     const pt = pel.translation();
@@ -383,7 +391,7 @@ export class Person extends Entity {
   }
 
   canStand() {
-    return this.conscious && this.health > 12 && this.blood > 35 && this.state !== ST.UNCONSCIOUS;
+    return this.conscious && this.health > 12 && this.blood > 35 && this.state !== ST.UNCONSCIOUS && !legsDisabled(this);
   }
 
   fall() {
@@ -758,6 +766,14 @@ export class Person extends Entity {
     const mult = PART_MULT[part] ?? 1;
     const dmg = info.amount * mult;
     if (dmg <= 0) return;
+    if (!this.attached[part]) {
+      // a part that came off: only the visuals
+      if (this.ch && info.point && (info.kind === 'bullet' || info.kind === 'cut') && !this.dummy && this.game.settings?.blood !== false) {
+        paintDamage(this.ch, part, info.point, 0.03, 1, 0);
+      }
+      if (this.ch && info.point && (info.kind === 'explosion' || info.kind === 'fire')) paintDamage(this.ch, part, info.point, 0.2, Math.min(1, dmg / 40), 1);
+      return;
+    }
     const wasAlive = this.alive;
     this.health -= dmg;
     this.pain = Math.min(1, this.pain + dmg / 45);
@@ -795,6 +811,7 @@ export class Person extends Entity {
     if (this.ch && info.kind === 'explosion' && info.point) {
       paintDamage(this.ch, part, info.point, 0.25, Math.min(1, dmg / 40), 1);
     }
+    if (info.kind === 'bullet' && info.dir) bulletTrauma(this, part, info.amount, info.dir);
   }
 
   addWound(part, point) {
@@ -859,7 +876,8 @@ export class Person extends Entity {
     const pv = this.prevVel;
     const dv = Math.min(impulse / this.ragdoll.masses[part], Math.hypot(v.x - pv[part * 3], v.y - pv[part * 3 + 1], v.z - pv[part * 3 + 2]));
     if (this.game.debugImpacts && dv > 3) console.log('impact', BONE_NAMES[part], 'J', impulse.toFixed(1), 'dv', dv.toFixed(1), this.state);
-    if (dv > 2.5) this.game.audio?.impact('flesh', Math.min(1, dv / 12), this.ragdoll.bodies[part].translation());
+    if (dv > 2.5) this.game.audio?.impact(this.dummy ? 'rubber' : 'flesh', Math.min(1, dv / 12), this.ragdoll.bodies[part].translation());
+    if (!this.attached[part]) return;
     // extremities swing fast during normal motion; they need a much harder hit to be hurt
     const limit = IMPACT_LIMIT[part];
     if (dv < limit) return;
@@ -867,9 +885,16 @@ export class Person extends Entity {
     const t = this.ragdoll.bodies[part].translation();
     this.damage({ amount, part, point: new THREE.Vector3(t.x, t.y, t.z), kind: 'blunt' });
     if (dv > 9 && this.state === ST.ACTIVE && part <= B.HEAD) this.fall();
+    impactTrauma(this, part, dv, limit);
   }
 
+  /** Returns false when the injuries are beyond healing (no head, cut in half). */
   heal() {
+    healInjuries(this);
+    if (fatalLoss(this)) {
+      this.bleed = 0;
+      return false;
+    }
     this.health = 100;
     this.blood = 100;
     this.bleed = 0;
@@ -887,6 +912,11 @@ export class Person extends Entity {
       this.recoverTime = 0.8;
     }
     this.ragdoll.wake();
+    return true;
+  }
+
+  injuryText() {
+    return injuryText(this);
   }
 
   // ------------------------------------------------------------------ frame update / render sync
@@ -894,6 +924,7 @@ export class Person extends Entity {
     if (!this.ch) return;
     this.syncBones();
     this.updateBleeding(dt);
+    if (!this.dummy) updateSpurts(this, dt);
     // eyes
     let lid = -0.45;
     if (this.state === ST.DEAD) lid = 0.12;
@@ -949,8 +980,9 @@ export class Person extends Entity {
       this.game.scene.remove(this.ch.root);
       // template buffers are shared between people: detach them so dispose() only frees ours
       const g = this.ch.geometry;
-      for (const k of ['normal', 'skinIndex', 'skinWeight']) g.deleteAttribute(k);
-      g.setIndex(null);
+      // (after a dismemberment the skinning and index buffers are this person's own)
+      for (const k of this.ch.ownSkin ? ['normal'] : ['normal', 'skinIndex', 'skinWeight']) g.deleteAttribute(k);
+      if (!this.ch.ownSkin) g.setIndex(null);
       g.dispose();
       this.ch.material.dispose();
       const lg = this.ch.lids[0]?.geometry;

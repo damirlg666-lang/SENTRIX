@@ -515,6 +515,7 @@ export class UI {
       fill.style.background = frac > 0.6 ? 'var(--good)' : frac > 0.3 ? 'var(--accent)' : 'var(--bad)';
     }
     tip.querySelector('.ht-state').textContent = state;
+    tip.querySelector('.ht-inj').textContent = e.kind === 'person' ? e.injuryText() : '';
     const x = Math.min(window.innerWidth - 180, t.pointerPx.x + 18);
     const y = Math.min(window.innerHeight - 80, t.pointerPx.y + 18);
     tip.style.left = x + 'px';

@@ -326,7 +326,7 @@ export class Tools {
     const anchor = world.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(hit.point.x, hit.point.y, hit.point.z));
     const joint = world.createImpulseJoint(R.JointData.spherical({ x: 0, y: 0, z: 0 }, { x: local.x, y: local.y, z: local.z }), anchor, g.body, true);
     this.grab = { entity: g.e, body: g.body, anchor, joint, local, dist: hit.toi };
-    if (g.e.kind === 'person') {
+    if (g.e.kind === 'person' && g.e.attached[hit.owner.part ?? 0]) {
       g.e.held = true;
       g.e.ragdoll.wake();
       if (g.e.conscious) this.game.audio?.voice(g.e, 0.3);
@@ -594,7 +594,8 @@ export class Tools {
           return true;
         });
       } else this.addMark(e, b);
-      e.held = e.bodies.some((x) => x.isFixed());
+      e.frozenParts = e.bodies.filter((x) => x.isFixed()).length;
+      e.held = e.frozenParts > 0;
       e.ragdoll.wake();
       this.emit('toast', frozen ? 'Unfrozen' : `${e.partName(part)} frozen in place`);
       return;
@@ -645,7 +646,8 @@ export class Tools {
   healAt() {
     const e = this.hover?.owner?.entity;
     if (!e || e.kind === 'static') return;
-    if (e.heal) e.heal();
+    let healed = true;
+    if (e.heal) healed = e.heal() !== false;
     else if (isFinite(e.maxHealth)) e.health = e.maxHealth;
     const p = e.position(new THREE.Vector3());
     const fx = this.game.fx;
@@ -657,7 +659,7 @@ export class Tools {
       });
     }
     this.game.audio?.click(1400);
-    this.emit('toast', `${e.name} healed`);
+    this.emit('toast', healed ? `${e.name} healed` : `${e.name} is beyond saving`);
   }
 
   deleteAt() {
@@ -813,6 +815,13 @@ export class Tools {
   }
 
   updateRopes() {
+    // people on a rope get checked for limbs being torn off
+    for (const e of this.game.entities) if (e.kind === 'person') e.tethered = false;
+    for (const r of this.ropes) {
+      if (r.a.entity?.kind === 'person') r.a.entity.tethered = true;
+      if (r.b.entity?.kind === 'person') r.b.entity.tethered = true;
+    }
+    for (const p of this.pins) if (p.entity.kind === 'person') p.entity.tethered = true;
     for (const r of [...this.ropes]) {
       if ((r.a.entity && r.a.entity.removed) || (r.b.entity && r.b.entity.removed) || !r.joint.isValid() || !r.a.body.isValid() || !r.b.body.isValid()) {
         this.removeRope(r);

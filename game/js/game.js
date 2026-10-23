@@ -6,6 +6,7 @@ import { WorldMap, groundHeight } from './world/map.js';
 import { Person, ST } from './entities/person.js';
 import { Prop } from './entities/prop.js';
 import { BODY_TYPES } from './characters/skeleton.js';
+import { blastTrauma } from './entities/injury.js';
 
 const _v = new THREE.Vector3();
 const _d = new THREE.Vector3();
@@ -186,7 +187,7 @@ export class Game {
           const t = b.translation();
           _d.set(t.x - p.x, t.y - p.y, t.z - p.z);
           const dist = _d.length();
-          if (dist < minD) {
+          if (dist < minD && e.attached[i]) {
             minD = dist;
             near = i;
           }
@@ -205,6 +206,7 @@ export class Game {
           const t = e.bodies[near].translation();
           e.damage({ amount: 130 * power * f * f, part: near, point: new THREE.Vector3(t.x, t.y, t.z), kind: 'explosion' });
           e.stun += 2 * f;
+          blastTrauma(e, p, power, radius);
         }
       } else {
         let hitAny = false;
