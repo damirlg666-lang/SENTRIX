@@ -2,8 +2,10 @@
 // from them (slack muscles, arterial bleeding, being unable to stand).
 import * as THREE from 'three';
 import { B, BONE_COUNT, PARENT } from '../characters/skeleton.js';
-import { splitMesh, makeCap, subtreeMask } from '../characters/gore.js';
-import { paintBind } from '../characters/humanModel.js';
+import { splitMesh, makeCap, subtreeMask, addOrgans, vertebraStub } from '../characters/gore.js';
+import { paintBind, paintDamage } from '../characters/humanModel.js';
+import { GutStrand } from './guts.js';
+import { GIBS } from '../catalog/gibs.js';
 
 export const CHAINS = [
   [B.UARM_L, B.FARM_L, B.HAND_L],
@@ -74,6 +76,7 @@ export function initInjuries(p) {
   p.attached = new Uint8Array(BONE_COUNT).fill(1);
   p.spurts = [];
   p.caps = [];
+  p.guts = [];
   p.tearWatch = 0;
 }
 
@@ -162,22 +165,34 @@ export function sever(p, bone, opts = {}) {
   const info = jointInfo(p.sk, bone);
   const blood = !p.dummy && game.settings?.blood !== false;
 
+  // cutting through the belly leaves it open: organs show and the guts spill out
+  const open = bone === B.SPINE && !p.dummy;
   if (p.ch) {
     const rings = splitMesh(p.ch, subtreeMask(bone), [info.axis.x, info.axis.y, info.axis.z]);
     const sides = [
       { bone: parent, ring: rings[0], dir: info.axis.clone(), stump: true },
       { bone, ring: rings[1], dir: info.axis.clone().negate(), stump: false },
     ];
+    const ends = [];
     for (const s of sides) {
       const center = s.ring ? s.ring.center : new THREE.Vector3(...info.at);
       const r = THREE.MathUtils.clamp(s.ring ? s.ring.radius : info.r, info.r * 0.6, info.r * 1.5);
-      const cap = makeCap(r, p.dummy);
       const c = p.sk.centers[s.bone];
-      cap.position.set(center.x - c[0], center.y - c[1], center.z - c[2]).addScaledVector(s.dir, -0.12 * r);
+      const local = new THREE.Vector3(center.x - c[0], center.y - c[1], center.z - c[2]);
+      let cap;
+      if (open) {
+        // just the backbone sticking out of the opening
+        cap = vertebraStub();
+        cap.position.copy(local).add(new THREE.Vector3(0, 0, -0.065));
+        ends.push({ body: p.ragdoll.bodies[s.bone], local: local.clone().add(new THREE.Vector3(0, 0, 0.03)) });
+      } else {
+        cap = makeCap(r, p.dummy);
+        cap.position.copy(local).addScaledVector(s.dir, -0.12 * r);
+      }
       cap.quaternion.setFromUnitVectors(UP, s.dir);
       p.ch.bones[s.bone].add(cap);
       p.caps.push(cap);
-      if (blood) paintBind(p.ch, center.x, center.y, center.z, r * 2.4, 0.9, 0);
+      if (blood) paintBind(p.ch, center.x, center.y, center.z, Math.min(0.12, r * 2.4), 0.9, 0);
       if (!p.dummy) {
         p.spurts.push({ bone: s.bone, local: cap.position.clone(), dir: s.dir.clone(), t: 0, power: s.stump ? 1 : 0.3, life: s.stump ? 9 : 2.5 });
       }
@@ -185,6 +200,11 @@ export function sever(p, bone, opts = {}) {
     if (p.ch.material.side !== THREE.DoubleSide) {
       p.ch.material.side = THREE.DoubleSide;
       p.ch.material.needsUpdate = true;
+    }
+    if (open) {
+      addOrgans(p.ch, p.sk);
+      p.guts.push(new GutStrand(game, ends[0], ends[1]));
+      if (Math.random() < 0.6) p.guts.push(new GutStrand(game, ends[0], ends[1], 1.2));
     }
   }
 
@@ -284,6 +304,11 @@ export function blastTrauma(p, center, power, radius) {
     const d = Math.hypot(t.x - center.x, t.y - center.y, t.z - center.z);
     return d >= radius ? 0 : power * Math.pow(1 - d / radius, 1.5);
   };
+  // right next to a big blast there is nothing left to save
+  if (p.attached[B.CHEST] && Math.max(strength(B.CHEST), strength(B.SPINE)) > 1.85 && Math.random() < 0.85) {
+    gib(p, center);
+    return;
+  }
   for (const chain of CHAINS) {
     const live = chain.filter((b) => p.attached[b]);
     if (!live.length) continue;
@@ -302,6 +327,44 @@ export function blastTrauma(p, center, power, radius) {
     const s = strength(B.HEAD);
     if (s > 2 && Math.random() < 0.35) sever(p, B.HEAD, { impulse: new THREE.Vector3(0, 6, 0) });
   }
+}
+
+/**
+ * Blown apart: every remaining limb, the head and the lower body come off and chunks of the
+ * torso fly out.
+ */
+export function gib(p, center) {
+  if (p.removed || p.gibbed) return;
+  p.gibbed = true;
+  const game = p.game;
+  const bodies = p.ragdoll.bodies;
+  const away = (bone, k) => {
+    const t = bodies[bone].translation();
+    return new THREE.Vector3(t.x - center.x, t.y - center.y + 0.4, t.z - center.z).normalize().multiplyScalar(p.ragdoll.masses[bone] * k);
+  };
+  for (const b of [B.HEAD, B.UARM_L, B.UARM_R, B.SPINE, B.THIGH_L, B.THIGH_R, B.FARM_L, B.SHIN_R]) {
+    if (p.attached[b] && !p.severed[b] && Math.random() < 0.9) sever(p, b, { impulse: away(b, 10) });
+  }
+  const { Prop } = game.classes;
+  const c = bodies[B.CHEST].translation();
+  const colors = p.dummy ? [0xf0b915, 0x3b3b3e] : [0x7d1414, 0x6a1010, 0xcf8580, 0xd9868c, 0x4a0f0f, 0xe8dfc9];
+  for (let i = 0; i < (p.dummy ? 6 : 11); i++) {
+    const pos = new THREE.Vector3(c.x + (Math.random() - 0.5) * 0.3, c.y + (Math.random() - 0.5) * 0.4, c.z + (Math.random() - 0.5) * 0.3);
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random() * 6, Math.random() * 6, Math.random() * 6));
+    const chunk = new Prop(game, GIBS.chunk, pos, q, { r: 0.03 + Math.random() * 0.05, color: colors[i % colors.length], lifetime: 40 + Math.random() * 20 });
+    chunk.bloodless = p.dummy;
+    const v = pos.clone().sub(center).normalize().multiplyScalar(3 + Math.random() * 5).add(new THREE.Vector3(0, 2.5, 0));
+    chunk.body.setLinvel({ x: v.x, y: v.y, z: v.z }, true);
+    chunk.body.setAngvel({ x: Math.random() * 20 - 10, y: Math.random() * 20 - 10, z: Math.random() * 20 - 10 }, true);
+    game.add(chunk, false);
+  }
+  if (!p.dummy && game.settings?.blood !== false) {
+    const at = new THREE.Vector3(c.x, c.y, c.z);
+    for (let i = 0; i < 3; i++) game.fx?.bloodBurst(at, new THREE.Vector3(Math.random() - 0.5, 0.6, Math.random() - 0.5).normalize(), 2.5);
+    if (p.ch) for (const b of [B.CHEST, B.SPINE, B.PELVIS]) paintDamage(p.ch, b, at, 0.35, 1, 0);
+  }
+  game.audio?.gore(new THREE.Vector3(c.x, c.y, c.z), 1);
+  p.die('explosion');
 }
 
 /** Hard knocks break bones; truly violent ones rip parts away. */

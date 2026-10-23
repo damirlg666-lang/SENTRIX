@@ -777,6 +777,10 @@ export class Person extends Entity {
     }
     this.blood = Math.max(0, this.blood - this.bleed * dt);
     this.bleed *= Math.exp(-dt / 25);
+    if (this.heartTimer != null) {
+      this.heartTimer -= dt;
+      if (this.heartTimer <= 0) this.die('heart');
+    }
     this.pain = Math.max(0, this.pain - dt * 0.03);
     this.stun = Math.max(0, this.stun - dt * 0.8);
     this.voiceCooldown -= dt;
@@ -855,6 +859,11 @@ export class Person extends Entity {
     if (this.ch && info.kind === 'explosion' && info.point) {
       paintDamage(this.ch, part, info.point, 0.25, Math.min(1, dmg / 40), 1);
     }
+    // the hole itself: a small dark centre in the wound (also on dummies)
+    if (this.ch && info.point && (info.kind === 'bullet' || info.kind === 'cut')) {
+      paintDamage(this.ch, part, info.point, info.kind === 'cut' ? 0.011 : 0.0075 + Math.min(0.006, dmg * 0.00015), 1, 1);
+    }
+    if ((info.kind === 'bullet' || info.kind === 'cut') && part === B.CHEST && info.point && !this.dummy) this.organHit(info.point);
     if (info.kind === 'bullet' && info.dir) bulletTrauma(this, part, info.amount, info.dir);
   }
 
@@ -898,6 +907,40 @@ export class Person extends Entity {
         const v = b.linvel();
         fx.addDrop(p, new THREE.Vector3(v.x * 0.5 + (Math.random() - 0.5) * 0.3, v.y * 0.5 - 0.2, v.z * 0.5 + (Math.random() - 0.5) * 0.3), 0.01 + Math.random() * 0.012);
       }
+      // blood runs down the body (world-down, so it follows however they are lying)
+      this.runTimer = (this.runTimer ?? 0) - dt;
+      if (this.runTimer <= 0 && this.ch) {
+        this.runTimer = 0.3;
+        // (painting walks every vertex, so only the latest few wounds and only until they have run out)
+        for (const w of this.wounds.slice(-3)) {
+          if ((w.run ?? 0) >= 0.2) continue;
+          w.run = Math.min(0.2, (w.run ?? 0) + 0.012 * Math.min(2, this.bleed));
+          const b = this.ragdoll.bodies[w.part];
+          const t = b.translation();
+          const r = b.rotation();
+          _q.set(r.x, r.y, r.z, r.w);
+          const p = _v2.copy(w.local).applyQuaternion(_q).add(_v.set(t.x, t.y, t.z));
+          p.y -= w.run;
+          p.x += (Math.random() - 0.5) * 0.01;
+          paintDamage(this.ch, w.part, p, 0.011, 0.55, 0);
+        }
+      }
+    }
+    // a punctured lung: coughing up blood
+    if (this.lungHit && this.alive && this.conscious) {
+      this.coughTimer -= dt;
+      if (this.coughTimer <= 0) {
+        this.coughTimer = 1.4 + Math.random() * 2.2;
+        const h = this.ragdoll.bodies[B.HEAD];
+        const t = h.translation();
+        const r = h.rotation();
+        _q.set(r.x, r.y, r.z, r.w);
+        const fwd = new THREE.Vector3(0, -0.15, 1).applyQuaternion(_q).normalize();
+        const mouth = new THREE.Vector3(0, -0.045, 0.09).applyQuaternion(_q).add(_v.set(t.x, t.y, t.z));
+        fx.bloodBurst(mouth, fwd, 0.35);
+        if (this.ch) paintDamage(this.ch, B.HEAD, mouth, 0.03, 0.6, 0);
+        this.game.audio?.impact('flesh', 0.25, mouth);
+      }
     }
     const lying = this.state === ST.DOWN || this.state === ST.DEAD || this.state === ST.UNCONSCIOUS;
     if (lying && this.bleed > 0.3 && this.stateTime > 1) {
@@ -916,9 +959,28 @@ export class Person extends Entity {
 
   /** Paint a bullet wound without dealing damage (used for exit wounds). */
   wound(part, point, scale = 1) {
-    if (this.dummy || !this.ch || this.game.settings?.blood === false) return;
+    if (!this.ch) return;
+    paintDamage(this.ch, part, point, 0.009 * scale, 1, 1);
+    if (this.dummy || this.game.settings?.blood === false) return;
     paintDamage(this.ch, part, point, 0.026 * scale, 1, 0);
     paintDamage(this.ch, part, point, 0.07 * scale, 0.3, 0);
+    this.addWound(part, point);
+  }
+
+  /** A shot or stab in the chest: the heart stops within seconds, a lung makes them cough blood. */
+  organHit(point) {
+    const b = this.ragdoll.bodies[B.CHEST];
+    const t = b.translation();
+    const r = b.rotation();
+    _q.set(r.x, r.y, r.z, r.w).invert();
+    const l = _v.set(point.x - t.x, point.y - t.y, point.z - t.z).applyQuaternion(_q);
+    if (Math.hypot(l.x - 0.02, l.y + 0.035, l.z - 0.035) < 0.055) {
+      this.bleed += 6;
+      if (this.heartTimer == null) this.heartTimer = 1.5 + Math.random() * 2.5;
+    } else if (Math.abs(l.x) > 0.02 && l.y > -0.09 && l.y < 0.1) {
+      this.lungHit = true;
+      this.coughTimer = 0.6;
+    }
   }
 
   /** Called from the physics impact listener. impulse in N*s. */
@@ -960,6 +1022,8 @@ export class Person extends Entity {
     this.fear = 0;
     this.pale = 0;
     this.wounds.length = 0;
+    this.lungHit = false;
+    this.heartTimer = null;
     if (this.ch) {
       clearDamage(this.ch);
       this.ch.material.userData.uniforms.uPale.value = 0;
@@ -982,6 +1046,7 @@ export class Person extends Entity {
     this.syncBones();
     this.updateBleeding(dt);
     if (!this.dummy) updateSpurts(this, dt);
+    for (const g of this.guts) g.update();
     // eyes
     let lid = -0.45;
     if (this.state === ST.DEAD) lid = 0.12;
@@ -1032,7 +1097,9 @@ export class Person extends Entity {
   destroy() {
     if (this.removed) return;
     super.destroy();
+    for (const g of this.guts) g.destroy();
     this.ragdoll.destroy();
+    for (const m of this.ch?.organs ?? []) m.geometry.dispose();
     if (this.ch) {
       this.game.scene.remove(this.ch.root);
       // template buffers are shared between people: detach them so dispose() only frees ours

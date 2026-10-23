@@ -17,6 +17,7 @@ export const G = {
   RAGDOLL: 0x0004,
   ANCHOR: 0x0008,
   SENSOR: 0x0010,
+  DEBRIS: 0x0020, // gut strands and the like: collide with the world, ignored by picking
 };
 
 export function groups(member, filter) {
@@ -24,8 +25,9 @@ export function groups(member, filter) {
 }
 
 export const GROUPS = {
-  world: groups(G.WORLD, G.PROP | G.RAGDOLL),
-  prop: groups(G.PROP, G.WORLD | G.PROP | G.RAGDOLL),
+  world: groups(G.WORLD, G.PROP | G.RAGDOLL | G.DEBRIS),
+  prop: groups(G.PROP, G.WORLD | G.PROP | G.RAGDOLL | G.DEBRIS),
+  debris: groups(G.DEBRIS, G.WORLD | G.PROP),
   ragdoll: groups(G.RAGDOLL, G.WORLD | G.PROP | G.RAGDOLL),
   anchor: groups(G.ANCHOR, 0),
   // query masks
