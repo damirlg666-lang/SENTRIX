@@ -436,8 +436,8 @@ export class UI {
   updateHint() {
     const t = this.tools;
     let h = '';
-    if (t.spawnItem) h = `<b>Click</b> to place ${t.spawnItem.name.toLowerCase()} · <b>R</b> rotate · <b>Esc</b> cancel`;
-    else if (t.active === 'hand') h = t.grab ? '<b>Move</b> to drag · <b>Wheel</b> pull / push · <b>F</b> pin in place · release to throw' : '<b>Click & drag</b> anything to move or throw it · <b>G</b> activate (TNT, car)';
+    if (t.spawnItem) h = `<b>Click</b> to place ${t.spawnItem.name.toLowerCase()}${t.spawnItem.def?.stick ? ' (click a person to stick it in)' : ''} · <b>R</b> rotate · <b>Esc</b> cancel`;
+    else if (t.active === 'hand') h = t.grab ? '<b>Move</b> to drag · <b>Wheel</b> pull / push · <b>F</b> pin in place · release to throw' : '<b>Click & drag</b> anything to move or throw it · <b>G</b> activate (TNT, car, thruster, tesla coil)';
     else if (t.active === 'weapon') {
       const w = t.weapon;
       const verb = { stab: 'stab with the', slash: 'swing the', chop: 'chop with the' }[w.melee] || 'fire the';

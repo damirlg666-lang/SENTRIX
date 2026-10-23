@@ -10,6 +10,9 @@ import { UI } from './ui.js';
 import { Prop } from './entities/prop.js';
 import { Car } from './entities/vehicle.js';
 import { PROPS } from './catalog/props.js';
+import { MELEE_PROPS } from './catalog/melee.js';
+import { SYRINGES } from './catalog/syringes.js';
+import { MACHINES } from './catalog/machines.js';
 
 const loadFill = document.getElementById('load-fill');
 const loadText = document.getElementById('load-text');
@@ -49,6 +52,14 @@ function starterScene(game, crowd) {
   add(PROPS.barrel, 5.1, 0.46, -4.1);
   for (let i = 0; i < 4; i++) add(PROPS.cone, -1.5 + i * 1.1, 0.33, -6.5);
   add(PROPS.mattress, 11.2, 0.13, -7.6, 0.1);
+  // a table of People Playground toys and a tesla coil (G to switch on)
+  add(PROPS.table, -2.4, 0.4, -3.6, 0.15);
+  add(MELEE_PROPS.sword, -2.75, 0.81, -3.55, 0.15 + Math.PI / 2);
+  add(MELEE_PROPS.knife, -2.2, 0.8, -3.35, 0.9);
+  add(SYRINGES.adrenaline, -1.95, 0.8, -3.75, 0.3);
+  add(SYRINGES.acid, -1.85, 0.8, -3.6, 0.5);
+  add(SYRINGES.life, -2.05, 0.8, -3.9, 0.1);
+  add(MACHINES.tesla, 7.5, 0.02, -6.5);
 }
 
 function bindInput(game) {
