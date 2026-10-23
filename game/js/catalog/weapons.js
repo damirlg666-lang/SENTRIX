@@ -4,6 +4,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { R } from '../engine/physics.js';
 import { merge } from '../util/geo.js';
 import * as TX from '../engine/textures.js';
+import { knifeModel, swordModel, axeModel } from './melee.js';
 
 const M = {
   black: () => new THREE.MeshStandardMaterial({ color: 0x18191b, roughness: 0.45, metalness: 0.6 }),
@@ -131,6 +132,10 @@ export const WEAPONS = [
   { id: 'sniper', name: 'Sniper rifle', model: sniperModel, damage: 120, impulse: 70, rate: 1.1, auto: false, spread: 0.0, recoil: 0.16, sound: 'sniper', pierce: 3, pos: [0.24, -0.17, -0.66] },
   { id: 'rocket', name: 'Rocket launcher', model: launcherModel, rate: 1.0, auto: false, projectile: 'rocket', recoil: 0.12, sound: 'rocket', pos: [0.26, -0.15, -0.62] },
   { id: 'grenade', name: 'Grenade', model: grenadeModel, rate: 0.6, auto: false, projectile: 'grenade', recoil: 0.0, sound: null, pos: [0.18, -0.12, -0.42] },
+  // melee weapons strike whatever is under the cursor
+  { id: 'knife', name: 'Knife', model: knifeModel, melee: 'stab', damage: 24, rate: 0.3, impulse: 6, sever: 0.08, recoil: 0, pos: [0.2, -0.17, -0.42] },
+  { id: 'sword', name: 'Sword', model: swordModel, melee: 'slash', damage: 32, rate: 0.42, impulse: 14, sever: 0.8, recoil: 0, pos: [0.24, -0.27, -0.55] },
+  { id: 'axe', name: 'Axe', model: axeModel, melee: 'chop', damage: 46, rate: 0.62, impulse: 22, sever: 0.9, breakChance: 0.5, recoil: 0, pos: [0.22, -0.3, -0.52] },
 ];
 
 export const PROJECTILES = {

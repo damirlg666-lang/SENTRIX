@@ -438,7 +438,11 @@ export class UI {
     let h = '';
     if (t.spawnItem) h = `<b>Click</b> to place ${t.spawnItem.name.toLowerCase()} · <b>R</b> rotate · <b>Esc</b> cancel`;
     else if (t.active === 'hand') h = t.grab ? '<b>Move</b> to drag · <b>Wheel</b> pull / push · <b>F</b> pin in place · release to throw' : '<b>Click & drag</b> anything to move or throw it · <b>G</b> activate (TNT, car)';
-    else if (t.active === 'weapon') h = `<b>Click</b> to fire ${t.weapon.name.toLowerCase()}${t.weapon.auto ? ' (hold for auto)' : ''} · <b>R</b> next weapon`;
+    else if (t.active === 'weapon') {
+      const w = t.weapon;
+      const verb = { stab: 'stab with the', slash: 'swing the', chop: 'chop with the' }[w.melee] || 'fire the';
+      h = `<b>Click</b> to ${verb} ${w.name.toLowerCase()}${w.auto ? ' (hold for auto)' : ''} · <b>R</b> next weapon`;
+    }
     else if (t.active === 'explode') h = '<b>Click</b> anywhere to make an explosion · pick the size above';
     else if (t.active === 'rope') h = t.ropeStart ? '<b>Click</b> the second point to tie the rope · <b>Esc</b> cancel' : '<b>Click</b> two points to tie them together (people, props or the world)';
     else if (t.active === 'push') h = '<b>Click</b> to blast things away with a burst of force';

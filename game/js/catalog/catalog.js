@@ -1,6 +1,7 @@
 // Spawn menu: categories, items and how each item is placed in the world.
 import * as THREE from 'three';
 import { PROPS } from './props.js';
+import { MELEE_PROPS } from './melee.js';
 import { Prop } from '../entities/prop.js';
 import { Car } from '../entities/vehicle.js';
 
@@ -33,6 +34,15 @@ export const CATEGORIES = [
       { id: 'slim', name: 'Tall guy', person: 'slim', height: 1.85 },
       { id: 'crowd', name: 'Crowd of 6', person: 'random', count: 6, height: 1.8 },
       { id: 'dummy', name: 'Crash test dummy', person: 'male', dummy: true, height: 1.8, desc: 'No blood' },
+    ],
+  },
+  {
+    id: 'melee',
+    name: 'Melee',
+    items: [
+      propItem(MELEE_PROPS.knife, { desc: 'Place on someone to stab' }),
+      propItem(MELEE_PROPS.sword, { desc: 'Throw it or drag it fast' }),
+      propItem(MELEE_PROPS.axe, { desc: 'Heavy chops take limbs' }),
     ],
   },
   {

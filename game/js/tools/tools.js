@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { R } from '../engine/physics.js';
 import { WEAPONS, PROJECTILES } from '../catalog/weapons.js';
+import { bladeHit } from '../catalog/melee.js';
 import { Prop } from '../entities/prop.js';
 import { groundHeight } from '../world/map.js';
 
@@ -72,6 +73,8 @@ export class Tools {
     this.vmLight = new THREE.PointLight(0xffd29a, 0, 3, 2);
     this.viewmodel.add(this.vmLight);
     this.sway = new THREE.Vector2();
+    this.swingT = 0;
+    this.swingSide = 1;
 
     // grab visuals
     const glow = new THREE.MeshBasicMaterial({ color: 0xffc04a, transparent: true, opacity: 0.85, depthTest: false, toneMapped: false });
@@ -321,6 +324,12 @@ export class Tools {
     const hit = this.hover;
     const g = this.grabbable(hit);
     if (!g) return;
+    if (g.e.embedded) {
+      // pulling a blade or needle back out
+      const pt = g.e.embedded;
+      g.e.unembed();
+      if (pt.entity.kind === 'person' && !pt.entity.dummy) this.game.fx?.bloodBurst(hit.point, this.rayDir.clone().negate(), 0.5);
+    }
     const world = this.game.physics.world;
     const local = bodyLocal(g.body, hit.point);
     const anchor = world.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(hit.point.x, hit.point.y, hit.point.z));
@@ -400,6 +409,10 @@ export class Tools {
   }
 
   fire(w) {
+    if (w.melee) {
+      this.melee(w);
+      return;
+    }
     const game = this.game;
     const origin = this.rayOrigin.clone();
     const muzzle = this.muzzleWorld();
@@ -505,6 +518,70 @@ export class Tools {
     }
   }
 
+  /** Swing a blade at whatever is under the cursor. */
+  melee(w) {
+    const game = this.game;
+    this.swingT = 1;
+    this.swingSide = -this.swingSide;
+    const cam = game.camera;
+    game.audio?.whoosh(cam.position, w.melee === 'stab' ? 0.35 : 0.8);
+    const hit = this.hover;
+    if (!hit) return;
+    const right = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0);
+    const up = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1);
+    let dir;
+    if (w.melee === 'stab') dir = this.rayDir.clone();
+    else if (w.melee === 'chop') dir = up.negate().lerp(this.rayDir, 0.4).normalize();
+    else dir = right.multiplyScalar(-this.swingSide).lerp(this.rayDir, 0.3).normalize();
+    const e = hit.owner?.entity;
+    if (e?.kind === 'person') {
+      bladeHit(game, e, hit.owner.part, hit.point, dir, { kind: w.melee, damage: w.damage, sever: w.sever, breakChance: w.breakChance, impulse: w.impulse });
+      game.noise(hit.point, 1.5);
+      return;
+    }
+    const mat = e?.material ?? 'concrete';
+    if (e && e.kind !== 'static') {
+      e.damage({ amount: w.damage * 1.5, kind: w.melee === 'stab' ? 'blunt' : 'cut', point: hit.point, dir });
+      e.impulse(dir.clone().multiplyScalar(w.impulse * 1.5), hit.point, hit.owner.part);
+    }
+    game.fx?.surfaceHit(hit.point, hit.normal, mat === 'flesh' ? 'wood' : mat, 0.03);
+    if (mat === 'metal' || mat === 'concrete') game.fx?.sparks(hit.point, hit.normal, 8, 5);
+    game.audio?.impact(mat === 'concrete' ? 'metal' : mat === 'grass' ? 'rubber' : mat, 0.6, hit.point);
+  }
+
+  /** First-person blade animation: idle hold, then a slash, overhead chop or thrust. */
+  meleePose(w, m, base, dt) {
+    this.swingT = Math.max(0, this.swingT - dt / 0.26);
+    const active = this.swingT > 0;
+    const k = 1 - this.swingT;
+    const e = active ? 1 - Math.pow(1 - k, 3) : 0;
+    const d = new THREE.Vector3();
+    const p = base.clone();
+    if (w.melee === 'slash') {
+      const s = this.swingSide;
+      const th = active ? s * (1.1 - 3.1 * e) : 0.35;
+      d.set(Math.sin(th), Math.cos(th), -0.75);
+      if (active) {
+        p.x += s * (0.12 - 0.3 * e);
+        p.z -= Math.sin(k * Math.PI) * 0.12;
+      }
+    } else if (w.melee === 'chop') {
+      const ph = active ? -0.2 + 2.1 * e : 0.45;
+      d.set(0.12, Math.cos(ph), -Math.sin(ph));
+      if (active) {
+        p.y += 0.06 - 0.22 * e;
+        p.z -= Math.sin(k * Math.PI) * 0.15;
+      }
+    } else {
+      d.set(0.02, 0.12, -1);
+      if (active) p.z -= Math.sin(k * Math.PI) * 0.28;
+    }
+    m.position.set(p.x + this.sway.x, p.y + this.sway.y, p.z);
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), d.normalize());
+    if (active) m.quaternion.copy(q);
+    else m.quaternion.slerp(q, Math.min(1, dt * 12));
+  }
+
   updateViewmodel(dt) {
     const show = this.active === 'weapon' && !this.spawnItem;
     this.viewmodel.visible = show;
@@ -512,6 +589,15 @@ export class Tools {
     const w = this.weapon;
     this.weaponModels.forEach((m, i) => (m.visible = i === this.weaponIndex));
     const m = this.weaponModels[this.weaponIndex];
+    if (w.melee) {
+      const base = new THREE.Vector3(...w.pos);
+      base.x += this.pointer.x * 0.06;
+      base.y += this.pointer.y * 0.04;
+      this.sway.x += (Math.sin(performance.now() * 0.0012) * 0.004 - this.sway.x) * Math.min(1, dt * 4);
+      this.sway.y += (Math.cos(performance.now() * 0.0017) * 0.003 - this.sway.y) * Math.min(1, dt * 4);
+      this.meleePose(w, m, base, dt);
+      return;
+    }
     this.recoil += (0 - this.recoil) * Math.min(1, dt * 9);
     // aim the gun at what is under the cursor
     const target = this.hover ? this.hover.point : _v.copy(this.rayOrigin).addScaledVector(this.rayDir, 50);
@@ -929,6 +1015,22 @@ export class Tools {
     this.ghost.add(g);
   }
 
+  /** Place a stickable prop (blade, needle, thruster) straight into the body part under the cursor. */
+  stickInto(def, hit) {
+    const game = this.game;
+    const e = hit.owner.entity;
+    const part = hit.owner.part;
+    const into = hit.normal.clone().negate().multiplyScalar(0.6).addScaledVector(this.rayDir, 0.4).normalize();
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(...def.stick.axis), into);
+    q.premultiply(new THREE.Quaternion().setFromAxisAngle(into, Math.random() * Math.PI * 2));
+    const tip = new THREE.Vector3(...def.stick.tip).applyQuaternion(q);
+    const pos = hit.point.clone().sub(tip).addScaledVector(into, def.stick.depth);
+    const prop = game.add(new Prop(game, def, pos, q));
+    prop.embed(e, part);
+    def.onStick?.(prop, e, part, hit.point.clone(), into);
+    return prop;
+  }
+
   spawnYawFor(point) {
     // face the camera by default
     const c = this.game.camera.position;
@@ -969,6 +1071,8 @@ export class Tools {
         }
         ent = game.spawnPerson(q.add(new THREE.Vector3(0, 0.02, 0)), n > 1 ? Math.random() * Math.PI * 2 : yaw, { type: item.person, dummy: !!item.dummy });
       }
+    } else if (item.def?.stick && hit.owner?.entity?.kind === 'person' && !hit.owner.entity.removed) {
+      ent = this.stickInto(item.def, hit);
     } else {
       ent = item.spawn(game, p, yaw);
     }

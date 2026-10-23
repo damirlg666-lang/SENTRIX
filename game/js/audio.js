@@ -436,6 +436,37 @@ export class Audio {
     osc.stop(t + 0.1 * R);
   }
 
+  /** A blade landing: a bright slice plus a wet (or plasticky, for dummies) thud. */
+  blade(kind, pos, dummy = false) {
+    if (!this.canPlay()) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const R = 1 / this.rate;
+    const o = this.out(pos, 0.7, 0.12);
+    if (kind !== 'stab') {
+      const n = this.noiseSrc(0.12);
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 2500 * this.rate;
+      const g = ctx.createGain();
+      this.env(g, t, 0.002, 0.5, 0.09 * R);
+      n.connect(hp);
+      hp.connect(g);
+      g.connect(o);
+    }
+    const n2 = this.noiseSrc(0.2);
+    const lp = ctx.createBiquadFilter();
+    lp.type = dummy ? 'bandpass' : 'lowpass';
+    lp.Q.value = dummy ? 2 : 4;
+    lp.frequency.setValueAtTime((dummy ? 700 : 1100) * this.rate, t);
+    lp.frequency.exponentialRampToValueAtTime((dummy ? 400 : 160) * this.rate, t + 0.15 * R);
+    const g2 = ctx.createGain();
+    this.env(g2, t, 0.003, kind === 'chop' ? 1.1 : 0.8, (kind === 'stab' ? 0.1 : 0.16) * R);
+    n2.connect(lp);
+    lp.connect(g2);
+    g2.connect(o);
+  }
+
   /** Wet tearing for dismemberment: a crack buried in a low, squelchy noise burst. */
   gore(pos, strength = 1) {
     if (!this.canPlay()) return;

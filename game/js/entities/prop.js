@@ -55,6 +55,7 @@ export class Prop extends Entity {
     this.maxHealth = this.health;
     this.age = 0;
     this.prevVel = new THREE.Vector3();
+    this.prevAng = new THREE.Vector3();
     this.fuse = -1;
     this.lifetime = opts.lifetime ?? def.lifetime ?? Infinity;
     this.sync();
@@ -71,6 +72,8 @@ export class Prop extends Entity {
   prePhysics(dt) {
     const v = this.body.linvel();
     this.prevVel.set(v.x, v.y, v.z);
+    const w = this.body.angvel();
+    this.prevAng.set(w.x, w.y, w.z);
     this.def.prePhysics?.(this, dt);
   }
 
@@ -78,6 +81,7 @@ export class Prop extends Entity {
     if (this.removed) return;
     this.age += dt;
     this.sync();
+    if (this.embedded && (this.embedded.entity.removed || !this.embedded.joint.isValid())) this.embedded = null;
     if (this.fuse > 0) {
       this.fuse -= dt;
       this.def.onFuseTick?.(this, dt);
@@ -95,7 +99,7 @@ export class Prop extends Entity {
     this.body.applyImpulseAtPoint({ x: imp.x, y: imp.y, z: imp.z }, { x: point.x, y: point.y, z: point.z }, true);
   }
 
-  onImpact(part, impulse, other) {
+  onImpact(part, impulse, other, otherOwner) {
     if (this.removed) return;
     const v = this.body.linvel();
     const dv = Math.hypot(v.x - this.prevVel.x, v.y - this.prevVel.y, v.z - this.prevVel.z);
@@ -107,7 +111,37 @@ export class Prop extends Entity {
       this.damage({ amount: (dv - this.def.fragile) * 25 + 10, kind: 'blunt' });
     }
     if (this.def.impactTrigger && dv > this.def.impactTrigger && this.age > 0.5) this.detonate();
-    this.def.onImpact?.(this, dv, other);
+    this.def.onImpact?.(this, dv, other, otherOwner);
+  }
+
+  /** Stick fast to a body part at the current relative pose (blades, needles, thrusters). */
+  embed(entity, part) {
+    if (this.embedded) this.unembed();
+    const world = this.game.physics.world;
+    const pb = entity.bodies[part];
+    const t = this.body.translation();
+    const r = this.body.rotation();
+    const tp = pb.translation();
+    const rp = pb.rotation();
+    const inv = new THREE.Quaternion(rp.x, rp.y, rp.z, rp.w).invert();
+    const anchor = new THREE.Vector3(t.x - tp.x, t.y - tp.y, t.z - tp.z).applyQuaternion(inv);
+    const frame = inv.clone().multiply(new THREE.Quaternion(r.x, r.y, r.z, r.w));
+    const jd = R.JointData.fixed({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0, w: 1 }, { x: anchor.x, y: anchor.y, z: anchor.z }, { x: frame.x, y: frame.y, z: frame.z, w: frame.w });
+    const joint = world.createImpulseJoint(jd, this.body, pb, true);
+    joint.setContactsEnabled(false);
+    const v = pb.linvel();
+    this.body.setLinvel({ x: v.x, y: v.y, z: v.z }, true);
+    this.embedded = { entity, part, joint };
+    this.def.onEmbed?.(this, entity, part);
+  }
+
+  /** Pull out of whatever it is stuck in. */
+  unembed() {
+    const e = this.embedded;
+    if (!e) return;
+    this.embedded = null;
+    if (e.joint.isValid()) this.game.physics.world.removeImpulseJoint(e.joint, true);
+    this.def.onUnembed?.(this, e.entity, e.part);
   }
 
   damage(info) {
@@ -163,6 +197,7 @@ export class Prop extends Entity {
 
   destroy() {
     if (this.removed) return;
+    this.unembed();
     super.destroy();
     this.game.physics.removeBody(this.body);
     this.game.scene.remove(this.mesh);

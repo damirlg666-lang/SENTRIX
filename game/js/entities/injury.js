@@ -235,6 +235,36 @@ export function fatalLoss(p) {
   return !!(p.severed[B.HEAD] || p.severed[B.SPINE]);
 }
 
+const CHILDREN = Array.from({ length: BONE_COUNT }, (_, i) => PARENT.flatMap((par, c) => (par === i ? [c] : [])));
+const SEVERABLE = (b) => b !== B.PELVIS && b !== B.CHEST;
+
+/**
+ * The cuttable joint nearest a world point: the hit part's own joint or one of its children's
+ * (a blade landing on the chest near the neck takes the head, near a shoulder the arm).
+ */
+export function nearestJoint(p, part, point) {
+  const cands = [];
+  if (SEVERABLE(part) && p.attached[part]) cands.push(part);
+  for (const c of CHILDREN[part]) if (p.attached[c]) cands.push(c);
+  let best = -1;
+  let bestD = Infinity;
+  const w = new THREE.Vector3();
+  for (const c of cands) {
+    bindToWorld(p, PARENT[c], jointInfo(p.sk, c).at, w);
+    const d = w.distanceTo(point);
+    if (d < bestD) {
+      bestD = d;
+      best = c;
+    }
+  }
+  return best;
+}
+
+/** How easily a blade cuts through at a joint (necks and waists are harder than limbs). */
+export function cutFactor(joint) {
+  return joint === B.HEAD ? 0.6 : joint === B.SPINE ? 0.35 : 1;
+}
+
 // ------------------------------------------------------------------ trauma sources
 /** High-calibre bullets break bones and can take smaller parts clean off. */
 export function bulletTrauma(p, part, amount, dir) {
