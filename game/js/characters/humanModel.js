@@ -20,7 +20,9 @@ class WorkerPool {
     this.queue = [];
     this.nextId = 1;
     for (let i = 0; i < n; i++) {
-      const w = new Worker(new URL('./modelWorker.js', import.meta.url), { type: 'module' });
+      // the single-file build provides the worker as a classic script (blob URL)
+      const inline = globalThis.MODEL_WORKER_URL;
+      const w = inline ? new Worker(inline) : new Worker(new URL('./modelWorker.js', import.meta.url), { type: 'module' });
       w.busy = false;
       w.onmessage = (e) => this._done(w, e.data);
       w.onerror = (e) => {

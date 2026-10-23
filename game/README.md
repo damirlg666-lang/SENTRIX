@@ -44,6 +44,20 @@ ES modules and web workers there. GitHub Pages works as-is (the page lives at `/
 
 Needs a browser with WebGL 2 (current Chrome, Edge, Firefox or Safari).
 
+### Single-file version (offline, Google Sites)
+
+`ragdoll-sandbox.html` is the whole game in one file (about 1.5 MB). Download it and open it
+with a double-click — no server needed, and it works offline (including on a Chromebook:
+open it from the Files app and it starts in Chrome).
+
+To put it on a Google Site: in the site editor choose **Insert → Embed → Embed code**, paste
+the entire contents of `ragdoll-sandbox.html`, click **Next → Insert**, then drag the embed's
+corners to make it big. If you have the game hosted somewhere (GitHub Pages), **Embed → By
+URL** with that link works too.
+
+Rebuild it after changing the code with `npm install --no-save esbuild` and
+`node tools/build-single-file.mjs`.
+
 ## Controls
 
 | Action | Mouse / keys | Touch |
