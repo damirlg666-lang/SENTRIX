@@ -29,8 +29,9 @@ dummy is in the People tab too.
 - **Electricity**: a taser that makes people convulse, and a tesla coil that throws
   lightning at whoever comes close.
 - **Rockets and drones**: a missile (G launches it; it explodes on impact, and stuck on someone
-  it takes them along), fireworks, and a kamikaze drone that takes off, hunts down the nearest
-  person and blows up.
+  it takes them along), fireworks, and a kamikaze drone that either hunts down the nearest
+  person on its own (G) or that you fly yourself with the Control tool, through its camera or
+  from behind, and crash into someone.
 - **Buildings**: a house, a wooden shed and a watchtower built from separate blocks, planks,
   pillars, slabs and glass. Shoot, cut or blow pieces out and the rest collapses.
 - **Machines and props**: thrusters that stick to things, explosives (barrels, TNT, mines),
@@ -93,7 +94,8 @@ Rebuild it after changing the code with `npm install --no-save esbuild` and
 - **Weapons** – pistol, assault rifle, shotgun, sniper rifle (penetrates, breaks bones and
   can take limbs off), rocket launcher, grenades, knife, sword, axe, flamethrower and taser.
   `R` switches weapon. The sniper rifle has a scope: hold the right mouse button (or press `Z`)
-  to look through it, the wheel zooms and `Shift` holds your breath to steady the aim.
+  to look through it, move the mouse to aim and click to fire; the wheel zooms and `Shift`
+  holds your breath to steady the aim.
 - **Explode** – small, medium or huge explosions anywhere; clicking an explosive sets it off.
 - **Rope** – click two points to tie them. Tie a bunch of balloons to someone's hand.
 - **Force** – a blast of air that knocks things over.
@@ -104,6 +106,10 @@ Rebuild it after changing the code with `npm install --no-save esbuild` and
 - **Delete** – removes things.
 - **Control** – take over a person: `WASD` walks relative to the camera, `Shift` runs,
   `Space` jumps and clicking throws punches. `Esc` lets go.
+  Click a kamikaze drone instead to fly it: the mouse (or the arrow keys) steers, `W` flies
+  where you look, `S` backs off, `A` / `D` move sideways, `Space` / `E` up, `Q` down, `Shift`
+  boosts, a click or `G` blows it up, `V` switches between its camera and a chase view and
+  `Esc` lets go (it keeps hovering there).
 
 Blades, syringes and thrusters placed from the spawn menu onto a person stick into the part
 you click. Grab a stuck item with the hand to pull it out; `G` on a person switches on any

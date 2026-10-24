@@ -8,6 +8,7 @@ import { B } from './characters/skeleton.js';
 import { carModel } from './entities/vehicle.js';
 import { PROPS } from './catalog/props.js';
 import { ST } from './entities/person.js';
+import { groundHeight } from './world/map.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -171,7 +172,7 @@ export class UI {
     } else wb.classList.add('hidden');
     const weaponMode = t.active === 'weapon' && !t.spawnItem;
     $('crosshair').classList.toggle('hidden', !weaponMode || t.scoped);
-    document.getElementById('view').style.cursor = weaponMode ? 'none' : t.spawnItem ? 'copy' : t.active === 'hand' ? 'grab' : 'crosshair';
+    document.getElementById('view').style.cursor = weaponMode || t.piloting ? 'none' : t.spawnItem ? 'copy' : t.active === 'hand' ? 'grab' : 'crosshair';
   }
 
   // ------------------------------------------------------------------ catalog
@@ -484,6 +485,7 @@ export class UI {
       $('scope').classList.toggle('hidden', !data);
       this.refreshToolbar();
     }
+    if (type === 'fly') this.setFlyView(data);
     if (type === 'tool' || type === 'weapon' || type === 'spawn') {
       this.refreshToolbar();
       if (type === 'spawn') this.renderCatalogItems();
@@ -507,7 +509,7 @@ export class UI {
       const w = t.weapon;
       const verb = { stab: 'stab with the', slash: 'swing the', chop: 'chop with the' }[w.melee] || 'fire the';
       h = `<b>Click</b> to ${verb} ${w.name.toLowerCase()}${w.auto ? ' (hold for auto)' : ''} · <b>R</b> next weapon`;
-      if (w.scope) h += t.scoped ? ' · <b>Wheel</b> zoom · <b>Shift</b> hold breath' : ' · hold <b>right mouse</b> or <b>Z</b> to aim with the scope';
+      if (w.scope) h = t.scoped ? '<b>Move the mouse</b> to aim · <b>Click</b> fire · <b>Wheel</b> zoom · <b>Shift</b> hold breath · <b>Z</b> or <b>Esc</b> leave the scope' : h + ' · hold <b>right mouse</b> or press <b>Z</b> to aim with the scope';
     }
     else if (t.active === 'explode') h = '<b>Click</b> anywhere to make an explosion · pick the size above';
     else if (t.active === 'rope') h = t.ropeStart ? '<b>Click</b> the second point to tie the rope · <b>Esc</b> cancel' : '<b>Click</b> two points to tie them together (people, props or the world)';
@@ -515,8 +517,11 @@ export class UI {
     else if (t.active === 'freeze') h = '<b>Click</b> to freeze or unfreeze. On people it pins the body part you click';
     else if (t.active === 'heal') h = '<b>Click</b> someone to heal or revive them';
     else if (t.active === 'delete') h = '<b>Click</b> to delete · <b>Ctrl+Z</b> undo last spawn';
-    else if (t.active === 'control') h = t.controlled ? '<b>WASD</b> walk · <b>Shift</b> run · <b>Space</b> jump · <b>Click</b> punch · <b>Esc</b> let go' : '<b>Click</b> a person to take control of them';
-    h += '<br><b>Right drag</b> look · <b>WASD</b> move · <b>Tab</b> spawn menu · <b>H</b> help';
+    else if (t.active === 'control') {
+      if (t.piloting) h = '<b>Mouse</b> or <b>arrows</b> steer · <b>W</b> fly where you look · <b>S</b> back · <b>A</b>/<b>D</b> sideways · <b>Space</b>/<b>E</b> up · <b>Q</b> down · <b>Shift</b> boost · <b>Click</b> or <b>G</b> blow up · <b>V</b> view · <b>Esc</b> let go';
+      else h = t.controlled ? '<b>WASD</b> walk · <b>Shift</b> run · <b>Space</b> jump · <b>Click</b> punch · <b>Esc</b> let go' : '<b>Click</b> a person to take control of them, or a drone to fly it';
+    }
+    if (!t.freeLook) h += '<br><b>Right drag</b> look · <b>WASD</b> move · <b>Tab</b> spawn menu · <b>H</b> help';
     $('hint').innerHTML = h;
   }
 
@@ -541,6 +546,7 @@ export class UI {
       this.fpsTime = 0;
       if (g.settings.fps) $('stat-fps').textContent = `${this.fps} fps`;
     }
+    this.updateFly(dt);
     // crosshair follows the pointer
     const t = this.tools;
     const ch = $('crosshair');
@@ -551,11 +557,67 @@ export class UI {
     this.updateHoverTip();
   }
 
+  // ------------------------------------------------------------------ drone camera
+  setFlyView(view) {
+    const el = $('fpv');
+    el.classList.toggle('hidden', !view || view === 'lost');
+    el.classList.toggle('chase', view === 'chase');
+    $('fpv-mode').textContent = view === 'chase' ? 'CHASE' : 'FPV';
+    if (view === 'fpv' || view === 'chase') this.flyTime ??= 0;
+    else this.flyTime = null;
+    if (view === 'lost') {
+      this.lostTimer = 1.4;
+      $('fpv-lost').classList.remove('hidden');
+    }
+    this.flyStat = 0;
+    this.refreshToolbar();
+  }
+
+  updateFly(dt) {
+    if (this.lostTimer > 0) {
+      this.lostTimer -= dt;
+      const el = $('fpv-lost');
+      if (this.lostTimer <= 0) el.classList.add('hidden');
+      else {
+        el.style.opacity = Math.min(1, this.lostTimer / 0.35);
+        const cv = el.querySelector('canvas');
+        const ctx = cv.getContext('2d');
+        const img = ctx.createImageData(cv.width, cv.height);
+        const d = img.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const v = Math.random() * 200;
+          d[i] = d[i + 1] = d[i + 2] = v;
+          d[i + 3] = 255;
+        }
+        ctx.putImageData(img, 0, 0);
+      }
+    }
+    const drone = this.tools.piloting;
+    if (!drone || this.flyTime == null) return;
+    this.flyTime += dt;
+    this.flyStat -= dt;
+    if (this.flyStat > 0) return;
+    this.flyStat = 0.1;
+    const t = drone.body.translation();
+    const v = drone.body.linvel();
+    const sec = Math.floor(this.flyTime);
+    $('fpv-time').textContent = `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+    $('fpv-alt').textContent = Math.max(0, t.y - 0.09 - groundHeight(t.x, t.z)).toFixed(1);
+    $('fpv-spd').textContent = Math.round(Math.hypot(v.x, v.y, v.z) * 3.6);
+    let best = Infinity;
+    for (const e of this.game.entities) {
+      if (e.kind !== 'person' || !e.alive || !e.attached?.[2]) continue;
+      const c = e.bodies[2].translation();
+      best = Math.min(best, Math.hypot(c.x - t.x, c.y - t.y, c.z - t.z));
+    }
+    $('fpv-tgt').textContent = isFinite(best) ? `${best.toFixed(best < 10 ? 1 : 0)} m` : '--';
+  }
+
   updateHoverTip() {
     const tip = $('hover-tip');
     const t = this.tools;
     const e = t.grab?.entity || t.hover?.owner?.entity;
-    if (!e || e.kind === 'static' || this.pointerOverUI || t.scoped) {
+    if (!e || e.kind === 'static' || this.pointerOverUI || t.freeLook) {
       tip.classList.add('hidden');
       return;
     }

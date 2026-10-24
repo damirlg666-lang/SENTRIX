@@ -71,7 +71,7 @@ export const CATEGORIES = [
       propItem(PROPS.mine, { desc: 'Steps trigger it' }),
       propItem(ROCKETS.missile, { desc: 'G to launch · sticks to people' }),
       propItem(ROCKETS.firework, { desc: 'G to light' }),
-      propItem(DRONE, { desc: 'G: hunts the nearest person' }),
+      propItem(DRONE, { desc: 'G: hunts on its own · Control tool: fly it' }),
     ],
   },
   {

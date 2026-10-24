@@ -1,5 +1,6 @@
 // Kamikaze drone: a quadcopter with a charge strapped underneath. Activated, it takes off,
-// picks the nearest living person, leads them as they run, dives in and blows up.
+// picks the nearest living person, leads them as they run, dives in and blows up. With the
+// Control tool the player flies it instead, through its nose camera or from behind.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { R } from '../engine/physics.js';
@@ -60,8 +61,16 @@ export function droneModel() {
 }
 
 const SPEED = 15;
+const PILOT_SPEED = 13;
+const PILOT_BOOST = 24;
+const LENS = new THREE.Vector3(0, -0.01, -0.125);
+const Y = new THREE.Vector3(0, 1, 0);
 const _q = new THREE.Quaternion();
+const _q2 = new THREE.Quaternion();
 const _m = new THREE.Matrix4();
+const _e = new THREE.Euler(0, 0, 0, 'YXZ');
+const _v = new THREE.Vector3();
+const _v2 = new THREE.Vector3();
 
 function findTarget(prop, pos) {
   let best = null;
@@ -78,24 +87,99 @@ function findTarget(prop, pos) {
   return best;
 }
 
+function launch(prop) {
+  if (prop.launched) return;
+  prop.launched = true;
+  prop.flight = 0;
+  prop.scanT = 0;
+  prop.hoverY = prop.body.translation().y + 2.5;
+  prop.body.wakeUp();
+}
+
+/** Where the pilot looks: yaw around world up, pitch positive looking up. */
+function lookDir(p, out) {
+  const cp = Math.cos(p.pitch);
+  return out.set(-Math.sin(p.yaw) * cp, Math.sin(p.pitch), -Math.cos(p.yaw) * cp);
+}
+
+/** The player takes over the drone. Returns the pilot state the tools write input into. */
+export function startPilot(prop, yaw) {
+  const wasFlying = prop.launched;
+  launch(prop);
+  prop.mode = 'pilot';
+  prop.target = null;
+  prop.pilot = { yaw, pitch: 0, move: new THREE.Vector3(), boost: false, lift: wasFlying ? 0 : 0.7, view: 'fpv', chase: null };
+  return prop.pilot;
+}
+
+/** The player lets go: it holds its height where it is. */
+export function stopPilot(prop) {
+  if (!prop.pilot) return;
+  prop.pilot = null;
+  prop.mode = 'hover';
+  if (!prop.removed) {
+    prop.hoverY = prop.body.translation().y;
+    prop.mesh.visible = true;
+  }
+}
+
+export function pilotLook(prop, dx, dy) {
+  const p = prop.pilot;
+  if (!p) return;
+  p.yaw -= dx * 0.0035;
+  p.pitch = THREE.MathUtils.clamp(p.pitch - dy * 0.0035, -1.45, 1.2);
+}
+
+/** Places the camera for a piloted drone: in its nose camera, or chasing it. Returns the fov. */
+export function placePilotCamera(prop, camera, dt, groundHeight) {
+  const p = prop.pilot;
+  const b = prop.body;
+  const t = b.translation();
+  const r = b.rotation();
+  _q.set(r.x, r.y, r.z, r.w);
+  _e.set(p.pitch, p.yaw, 0);
+  const look = _q2.setFromEuler(_e);
+  if (p.view === 'fpv') {
+    prop.mesh.visible = false;
+    camera.position.copy(LENS).applyQuaternion(_q).add(t);
+    // the camera is bolted to the frame, so it banks with the drone (half as much, for comfort)
+    const tilt = new THREE.Quaternion().setFromUnitVectors(Y, _v.copy(Y).applyQuaternion(_q));
+    camera.quaternion.identity().slerp(tilt, 0.5).multiply(look);
+    p.chase = null;
+    return 92;
+  }
+  prop.mesh.visible = true;
+  const fwd = lookDir(p, _v);
+  const want = _v2.set(t.x, t.y, t.z).addScaledVector(fwd, -2.4);
+  want.y += 0.7;
+  if (!p.chase) p.chase = want.clone();
+  else p.chase.lerp(want, 1 - Math.exp(-10 * dt));
+  const gh = groundHeight(p.chase.x, p.chase.z) + 0.2;
+  if (p.chase.y < gh) p.chase.y = gh;
+  camera.position.copy(p.chase);
+  camera.lookAt(t.x + fwd.x * 3, t.y + fwd.y * 3, t.z + fwd.z * 3);
+  return null;
+}
+
 export const DRONE = {
   id: 'drone', name: 'Kamikaze drone', material: 'metal', mass: 2.2, size: 0.18, bottom: 0.09, ccd: true, health: 15, explosive: 1.6, loud: 0.8,
-  linearDamping: 0.1, angularDamping: 2,
+  linearDamping: 0.1, angularDamping: 2, pilotable: true,
   build: () => ({
     mesh: droneModel(),
     colliders: [{ desc: R.ColliderDesc.cuboid(0.17, 0.035, 0.17).setTranslation(0, 0.01, 0) }, { desc: R.ColliderDesc.cuboid(0.055, 0.04, 0.08).setTranslation(0, -0.05, 0) }],
   }),
   onActivate: (prop) => {
-    if (prop.launched) return false;
-    prop.launched = true;
-    prop.flight = 0;
-    prop.scanT = 0;
-    prop.hoverY = prop.body.translation().y + 2.5;
-    prop.body.wakeUp();
+    if (prop.pilot || prop.mode === 'hunt') return false;
+    launch(prop);
+    prop.mode = 'hunt';
     return true;
   },
-  activateText: () => 'Drone launched',
-  statusText: (prop) => (!prop.launched ? 'Press G to launch' : prop.target && !prop.target.removed && prop.target.alive ? `Hunting ${prop.target.name}` : 'Searching…'),
+  activateText: () => 'Drone hunting',
+  statusText: (prop) => {
+    if (prop.pilot) return 'Remote controlled';
+    if (prop.mode !== 'hunt') return prop.launched ? 'Hovering · G: hunt · Control tool: fly it' : 'G: hunt on its own · Control tool: fly it';
+    return prop.target && !prop.target.removed && prop.target.alive ? `Hunting ${prop.target.name}` : 'Searching…';
+  },
   prePhysics: (prop, dt) => {
     if (!prop.launched || prop.removed) return;
     const b = prop.body;
@@ -104,50 +188,75 @@ export const DRONE = {
     const v = b.linvel();
     const pos = new THREE.Vector3(t.x, t.y, t.z);
     prop.flight += dt;
-    prop.scanT -= dt;
-    if (prop.scanT <= 0) {
-      prop.scanT = 0.4;
-      if (!prop.target || prop.target.removed || !prop.target.alive) prop.target = findTarget(prop, pos);
-    }
     const desired = new THREE.Vector3();
-    const tg = prop.target;
-    if (tg && !tg.removed && tg.alive && prop.flight > 0.6) {
-      const cb = tg.bodies[2];
-      const c = cb.translation();
-      const cv = cb.linvel();
-      const aim = new THREE.Vector3(c.x, c.y, c.z);
-      const dist = aim.distanceTo(pos);
-      if (dist < 0.6) {
-        prop.detonate();
-        return;
+    let head = null;
+    const pilot = prop.pilot;
+    if (pilot) {
+      // fly toward where the pilot looks; sideways and up/down stay level
+      lookDir(pilot, _v);
+      desired.addScaledVector(_v, pilot.move.z);
+      desired.x += Math.cos(pilot.yaw) * pilot.move.x;
+      desired.z -= Math.sin(pilot.yaw) * pilot.move.x;
+      desired.y += pilot.move.y;
+      if (desired.lengthSq() > 1) desired.normalize();
+      desired.multiplyScalar(pilot.boost ? PILOT_BOOST : PILOT_SPEED);
+      if (pilot.lift > 0) {
+        pilot.lift -= dt;
+        desired.y = Math.max(desired.y, 2.5); // take off on its own first
       }
-      // lead a moving target, keep some height until close, then dive
-      aim.addScaledVector(new THREE.Vector3(cv.x, cv.y, cv.z), Math.min(1, dist / SPEED) * 0.8);
-      const to = aim.sub(pos);
-      if (dist > 7) {
-        desired.copy(to).setLength(SPEED);
-        desired.y += Math.max(0, c.y + 2 - pos.y) * 1.5;
-      } else desired.copy(to).setLength(SPEED * 1.15);
+      head = new THREE.Vector3(-Math.sin(pilot.yaw), 0, -Math.cos(pilot.yaw));
+    } else if (prop.mode === 'hunt') {
+      prop.scanT -= dt;
+      if (prop.scanT <= 0) {
+        prop.scanT = 0.4;
+        if (!prop.target || prop.target.removed || !prop.target.alive) prop.target = findTarget(prop, pos);
+      }
+      const tg = prop.target;
+      if (tg && !tg.removed && tg.alive && prop.flight > 0.6) {
+        const cb = tg.bodies[2];
+        const c = cb.translation();
+        const cv = cb.linvel();
+        const aim = new THREE.Vector3(c.x, c.y, c.z);
+        const dist = aim.distanceTo(pos);
+        if (dist < 0.6) {
+          prop.detonate();
+          return;
+        }
+        // lead a moving target, keep some height until close, then dive
+        aim.addScaledVector(new THREE.Vector3(cv.x, cv.y, cv.z), Math.min(1, dist / SPEED) * 0.8);
+        const to = aim.sub(pos);
+        if (dist > 7) {
+          desired.copy(to).setLength(SPEED);
+          desired.y += Math.max(0, c.y + 2 - pos.y) * 1.5;
+        } else desired.copy(to).setLength(SPEED * 1.15);
+      } else {
+        desired.set(Math.sin(prop.flight * 0.7) * 0.6, (prop.hoverY - pos.y) * 2, Math.cos(prop.flight * 0.5) * 0.6);
+      }
     } else {
-      desired.set(Math.sin(prop.flight * 0.7) * 0.6, (prop.hoverY - pos.y) * 2, Math.cos(prop.flight * 0.5) * 0.6);
+      desired.set(0, THREE.MathUtils.clamp((prop.hoverY - pos.y) * 2, -4, 4), 0);
+      head = prop.heading;
     }
-    const acc = desired.sub(new THREE.Vector3(v.x, v.y, v.z)).multiplyScalar(4);
-    if (acc.length() > 26) acc.setLength(26);
+    const acc = desired.sub(new THREE.Vector3(v.x, v.y, v.z)).multiplyScalar(pilot ? 5 : 4);
+    const maxAcc = pilot ? 34 : 26;
+    if (acc.length() > maxAcc) acc.setLength(maxAcc);
     const thrust = acc.clone();
     thrust.y += 9.81 * (prop.game.physics.gravityScale ?? 1);
     b.applyImpulse({ x: thrust.x * m * dt, y: thrust.y * m * dt, z: thrust.z * m * dt }, true);
     prop.load = thrust.length() / 9.81;
     // attitude: rotors tilt toward the thrust, nose toward where it is heading
     const up = thrust.normalize();
-    const head = new THREE.Vector3(v.x, 0, v.z);
-    if (head.lengthSq() < 0.25) head.set(Math.sin(prop.flight * 0.3), 0, Math.cos(prop.flight * 0.3));
+    if (!head) {
+      head = new THREE.Vector3(v.x, 0, v.z);
+      if (head.lengthSq() < 0.25) head.set(Math.sin(prop.flight * 0.3), 0, Math.cos(prop.flight * 0.3));
+    }
+    prop.heading = head.clone().normalize();
     const back = head.normalize().negate();
     back.addScaledVector(up, -back.dot(up)).normalize();
     const right = new THREE.Vector3().crossVectors(up, back);
     _m.makeBasis(right, up, back);
     const target = new THREE.Quaternion().setFromRotationMatrix(_m);
     const r = b.rotation();
-    _q.set(r.x, r.y, r.z, r.w).slerp(target, 0.15);
+    _q.set(r.x, r.y, r.z, r.w).slerp(target, pilot ? 0.2 : 0.15);
     b.setRotation({ x: _q.x, y: _q.y, z: _q.z, w: _q.w }, true);
     b.setAngvel({ x: 0, y: 0, z: 0 }, true);
   },
@@ -163,7 +272,8 @@ export const DRONE = {
     prop.sound?.setPitch(0.8 + Math.min(1.6, prop.load ?? 1) * 0.35);
   },
   onImpact: (prop, dv) => {
-    if (prop.launched && prop.flight > 0.8 && dv > 2.5) prop.detonate();
+    // a piloted drone can bump into things a little before it goes off
+    if (prop.launched && prop.flight > 0.8 && dv > (prop.pilot ? 3.5 : 2.5)) prop.detonate();
   },
   onDestroy: (prop) => {
     prop.sound?.stop();

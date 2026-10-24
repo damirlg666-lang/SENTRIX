@@ -25,6 +25,17 @@ export class CameraController {
     this.moveLock = false; // keyboard drives something else (controlled person)
     this.baseFov = camera.fov;
     this.scope = null; // sniper scope: the camera stays put and turns in place
+    this.rig = null; // something else places the camera (a piloted drone): fn(camera, dt) → fov or null
+  }
+
+  /** Back to orbiting after a rig let go, looking at where it ended. */
+  leaveRig(point, yaw) {
+    this.rig = null;
+    this.goalPivot.copy(point);
+    this.pivot.copy(point);
+    this.yaw = this.goalYaw = yaw;
+    this.pitch = this.goalPitch = 0.35;
+    this.dist = this.goalDist = 7;
   }
 
   /** Look through a scope: fixed position, narrow field of view, slower mouse look. */
@@ -94,10 +105,20 @@ export class CameraController {
 
   update(dt) {
     const cam = this.camera;
-    const fov = this.scope ? this.scope.fov : this.baseFov;
+    const rigFov = this.rig ? this.rig(cam, dt) : null;
+    const fov = this.scope ? this.scope.fov : rigFov ?? this.baseFov;
     if (Math.abs(cam.fov - fov) > 0.01) {
       cam.fov += (fov - cam.fov) * (1 - Math.exp(-14 * dt));
       cam.updateProjectionMatrix();
+    }
+    if (this.rig) {
+      if (this.shakeAmt > 0.001) {
+        const a = this.shakeAmt * this.shakeAmt * 0.06;
+        cam.rotateX((Math.random() - 0.5) * a);
+        cam.rotateY((Math.random() - 0.5) * a);
+        this.shakeAmt = Math.max(0, this.shakeAmt - dt * 2.2);
+      }
+      return;
     }
     if (this.scope) {
       const s = this.scope;

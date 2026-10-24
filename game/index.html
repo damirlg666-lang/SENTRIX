@@ -70,6 +70,18 @@
 
     <div id="hint"></div>
     <div id="toast"></div>
+    <div id="fpv" class="hidden">
+      <div class="fpv-frame"></div>
+      <div class="fpv-cross"></div>
+      <div class="fpv-info">
+        <div class="fpv-rec"><i></i>REC <span id="fpv-time">00:00</span></div>
+        <div>ALT <b id="fpv-alt">0.0</b> m</div>
+        <div>SPD <b id="fpv-spd">0</b> km/h</div>
+        <div>TGT <b id="fpv-tgt">--</b></div>
+      </div>
+      <div class="fpv-mode"><span id="fpv-mode">FPV</span><small>V: switch view</small></div>
+    </div>
+    <div id="fpv-lost" class="hidden"><canvas width="160" height="90"></canvas><span>SIGNAL LOST</span></div>
     <div id="scope" class="hidden">
       <svg viewBox="-100 -100 200 200" aria-hidden="true">
         <circle r="99" style="fill:none;stroke:#000;stroke-width:2.5"/>
@@ -119,9 +131,10 @@
             <h3>Tools</h3>
             <p><kbd>1</kbd>–<kbd>9</kbd> select tool &nbsp;<kbd>Tab</kbd> spawn menu</p>
             <p><b>Hand</b>: drag anything. <kbd>Wheel</kbd> pull/push, <kbd>F</kbd> freeze in place while holding.</p>
-            <p><b>Weapons</b>: <kbd>Left mouse</kbd> fire, <kbd>R</kbd> next weapon. Includes knife, sword, axe, flamethrower and taser. Sniper rifle: hold <kbd>Right mouse</kbd> (or press <kbd>Z</kbd>) for the scope, <kbd>Wheel</kbd> zooms, <kbd>Shift</kbd> steadies.</p>
+            <p><b>Weapons</b>: <kbd>Left mouse</kbd> fire, <kbd>R</kbd> next weapon. Includes knife, sword, axe, flamethrower and taser. Sniper rifle: hold <kbd>Right mouse</kbd> (or press <kbd>Z</kbd>) for the scope, then move the mouse to aim and click to fire; <kbd>Wheel</kbd> zooms, <kbd>Shift</kbd> steadies.</p>
             <p><b>Rope</b>: click two points to tie them together.</p>
             <p><b>Control</b>: click a person, then <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk, <kbd>Shift</kbd> run, <kbd>Space</kbd> jump, click to punch.</p>
+            <p><b>Drone</b>: with the Control tool, click a kamikaze drone to fly it. Mouse steers (or the arrow keys), <kbd>W</kbd> flies where you look, <kbd>S</kbd> back, <kbd>A</kbd><kbd>D</kbd> sideways, <kbd>Space</kbd>/<kbd>E</kbd> up, <kbd>Q</kbd> down, <kbd>Shift</kbd> boost, click or <kbd>G</kbd> to blow it up, <kbd>V</kbd> switches between its camera and a chase view, <kbd>Esc</kbd> lets go.</p>
             <p><b>Spawning onto people</b>: knives, swords, syringes, thrusters and missiles placed on a person stick into them. <kbd>G</kbd> on a person switches them on; grab a stuck item to pull it out.</p>
             <p><kbd>P</kbd> pause &nbsp;<kbd>T</kbd> slow motion &nbsp;<kbd>Ctrl</kbd>+<kbd>Z</kbd> undo spawn</p>
             <p><kbd>Esc</kbd> cancel / close menus &nbsp;<kbd>H</kbd> this help &nbsp;<kbd>Alt</kbd>+<kbd>Enter</kbd> full screen</p>

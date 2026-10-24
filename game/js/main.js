@@ -88,10 +88,76 @@ function bindInput(game) {
     return Math.hypot(a.x - b.x, a.y - b.y);
   };
 
+  // While aiming through the scope or flying a drone the mouse turns the view directly. The
+  // pointer is locked for that when the page is allowed to (not in every embed); otherwise the
+  // cursor moves as usual and the view keeps turning while it is held at the window edge.
+  let unlocking = false;
+  let lockDenied = false;
+  let lockAsked = -1e9; // a request is still being answered for a moment after it was made
+  let wasLocked = false;
+  const wantLock = () => tools.freeLook && !ui.modalOpen && !ui.catalogOpen;
+  const syncLock = (retry = false) => {
+    if (retry) lockDenied = false;
+    const locked = document.pointerLockElement === canvas;
+    if (wantLock() && !locked && !lockDenied && performance.now() - lockAsked > 1000) {
+      lockAsked = performance.now();
+      try {
+        const r = canvas.requestPointerLock();
+        if (r && r.catch) r.catch(() => (lockDenied = true));
+      } catch {
+        lockDenied = true; // not allowed here (sandboxed embed): the edge turning takes over
+      }
+    } else if (!wantLock() && locked) {
+      unlocking = true;
+      document.exitPointerLock();
+    }
+  };
+  tools.on((type) => {
+    if (type === 'scope' || type === 'fly') syncLock(true);
+  });
+  document.addEventListener('pointerlockerror', () => {
+    lockDenied = true;
+    lockAsked = -1e9;
+  });
+  document.addEventListener('pointerlockchange', () => {
+    const locked = document.pointerLockElement === canvas;
+    tools.pointerLocked = locked;
+    lockAsked = -1e9;
+    // the browser took the lock away (Esc): leave the scope or the drone too
+    if (wasLocked && !locked && !unlocking && tools.freeLook) tools.cancel();
+    if (!locked) unlocking = false;
+    wasLocked = locked;
+  });
+
+  // Pressing a second mouse button while one is held does not fire pointerdown (the pointer is
+  // already "down"), only a pointermove with the changed button, so presses and releases go
+  // through these from both events.
+  const press = (button) => {
+    if (button === 0) tools.down();
+    else if (button === 2) {
+      rotating = true;
+      // holding the right button with the sniper rifle looks through the scope
+      if (tools.canScope() && !tools.scoped) {
+        tools.setScope(true);
+        scopeByMouse = true;
+      }
+    } else if (button === 1) panning = true;
+  };
+  const release = (button) => {
+    if (button === 0) tools.up();
+    else if (button === 2) {
+      rotating = false;
+      if (scopeByMouse) tools.setScope(false);
+      scopeByMouse = false;
+    } else if (button === 1) panning = false;
+  };
+  const BUTTON_BIT = [1, 4, 2]; // e.button → its bit in e.buttons
+
   canvas.addEventListener('pointerdown', (e) => {
     canvas.focus();
     game.audio.unlock();
     ui.pointerOverUI = false;
+    syncLock();
     if (e.pointerType === 'touch') {
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (touches.size === 1) {
@@ -110,23 +176,12 @@ function bindInput(game) {
       }
       return;
     }
-    canvas.setPointerCapture(e.pointerId);
+    if (document.pointerLockElement !== canvas) canvas.setPointerCapture(e.pointerId);
     tools.setPointer(e.clientX, e.clientY);
     lastX = e.clientX;
     lastY = e.clientY;
-    if (e.button === 0) tools.down();
-    else if (e.button === 2) {
-      rotating = true;
-      // holding the right button with the sniper rifle looks through the scope
-      if (tools.canScope() && !tools.scoped) {
-        tools.setScope(true);
-        scopeByMouse = true;
-      }
-    }
-    else if (e.button === 1) {
-      panning = true;
-      e.preventDefault();
-    }
+    if (e.button === 1) e.preventDefault();
+    press(e.button);
   });
 
   canvas.addEventListener('pointermove', (e) => {
@@ -145,12 +200,23 @@ function bindInput(game) {
       }
       return;
     }
-    tools.setPointer(e.clientX, e.clientY);
-    const dx = e.clientX - lastX;
-    const dy = e.clientY - lastY;
+    const chord = e.button >= 0 && e.button <= 2;
+    if (chord) {
+      if (e.buttons & BUTTON_BIT[e.button]) press(e.button);
+      else release(e.button);
+    }
+    const locked = document.pointerLockElement === canvas;
+    if (!locked) tools.setPointer(e.clientX, e.clientY);
+    const dx = locked ? e.movementX : e.clientX - lastX;
+    const dy = locked ? e.movementY : e.clientY - lastY;
     lastX = e.clientX;
     lastY = e.clientY;
-    if (rotating) cam.rotate(dx, dy);
+    // some browsers report a jump when the lock starts; no hand moves a mouse that far in one event
+    if (locked && (chord || Math.abs(dx) > 250 || Math.abs(dy) > 250)) return;
+    if (tools.freeLook) {
+      tools.lookMoved = true;
+      tools.look(dx, dy);
+    } else if (rotating) cam.rotate(dx, dy);
     if (panning) cam.pan(dx, dy);
   });
 
@@ -164,22 +230,19 @@ function bindInput(game) {
       if (touches.size < 2) pinchDist = 0;
       return;
     }
-    if (e.button === 0) tools.up();
-    if (e.button === 2) {
-      rotating = false;
-      if (scopeByMouse) tools.setScope(false);
-      scopeByMouse = false;
-    }
-    if (e.button === 1) panning = false;
+    release(e.button);
   };
   canvas.addEventListener('pointerup', end);
   canvas.addEventListener('pointercancel', (e) => {
     end(e);
-    rotating = false;
-    panning = false;
+    if (e.pointerType !== 'touch') [0, 1, 2].forEach(release);
   });
   canvas.addEventListener('pointerleave', () => (ui.pointerOverUI = true));
-  canvas.addEventListener('pointerenter', () => (ui.pointerOverUI = false));
+  canvas.addEventListener('pointerenter', (e) => {
+    ui.pointerOverUI = false;
+    lastX = e.clientX;
+    lastY = e.clientY;
+  });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('mousedown', (e) => {
     if (e.button === 1) e.preventDefault(); // no autoscroll on middle click
@@ -197,6 +260,7 @@ function bindInput(game) {
   window.addEventListener('keydown', (e) => {
     const tag = e.target && e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    Promise.resolve().then(() => syncLock()); // a menu opening frees the cursor, closing it takes it back
     tools.keysShift = e.shiftKey;
     game.audio.unlock();
     if (e.code === 'Escape') {

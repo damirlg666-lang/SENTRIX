@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { R } from '../engine/physics.js';
 import { WEAPONS, PROJECTILES } from '../catalog/weapons.js';
 import { bladeHit } from '../catalog/melee.js';
+import { startPilot, stopPilot, pilotLook, placePilotCamera } from '../catalog/drone.js';
 import { Prop } from '../entities/prop.js';
 import { groundHeight } from '../world/map.js';
 
@@ -56,6 +57,9 @@ export class Tools {
     this.cooldown = 0;
     this.recoil = 0;
     this.listeners = [];
+    this.piloting = null; // the drone the player is flying
+    this.pilotPos = new THREE.Vector3();
+    this.lookMoved = false; // the mouse moved since the scope or drone view started
 
     // first-person weapon models hang off the camera
     const cam = game.camera;
@@ -113,7 +117,10 @@ export class Tools {
   select(id) {
     if (this.grab) this.release();
     if (id !== 'weapon') this.setScope(false);
-    if (id !== 'control') this.releaseControl();
+    if (id !== 'control') {
+      this.releaseControl();
+      this.stopPiloting();
+    }
     this.spawnItem = null;
     this.ghost.visible = false;
     this.ropeStart = null;
@@ -134,6 +141,7 @@ export class Tools {
   selectSpawn(item) {
     if (this.grab) this.release();
     this.setScope(false);
+    this.stopPiloting();
     this.spawnItem = item;
     this.spawnYaw = 0;
     this.buildGhost(item);
@@ -147,6 +155,10 @@ export class Tools {
     }
     if (this.controlled) {
       this.releaseControl();
+      return true;
+    }
+    if (this.piloting) {
+      this.stopPiloting();
       return true;
     }
     if (this.spawnItem) {
@@ -227,6 +239,7 @@ export class Tools {
   setScope(on) {
     if (on && !this.scoped && this.canScope()) {
       this.scoped = true;
+      this.lookMoved = false;
       this.game.cam.enterScope(this.weapon.scope);
       this.game.audio?.click(500);
       this.emit('scope', true);
@@ -235,6 +248,16 @@ export class Tools {
       this.game.cam.exitScope();
       this.emit('scope', false);
     }
+  }
+
+  /** Through the scope or a drone camera the mouse aims without holding a button. */
+  get freeLook() {
+    return this.scoped || !!this.piloting;
+  }
+
+  look(dx, dy) {
+    if (this.piloting) pilotLook(this.piloting, dx, dy);
+    else this.game.cam.rotate(dx, dy);
   }
 
   /** Returns true if the wheel was used by the tool. */
@@ -255,6 +278,16 @@ export class Tools {
   }
 
   key(code) {
+    if (this.piloting && code === 'KeyG') {
+      this.piloting.detonate();
+      return true;
+    }
+    if (this.piloting && code === 'KeyV') {
+      const p = this.piloting.pilot;
+      p.view = p.view === 'fpv' ? 'chase' : 'fpv';
+      this.emit('fly', p.view);
+      return true;
+    }
     if (this.controlled && code === 'Space') {
       this.controlled.jump();
       return true;
@@ -331,6 +364,8 @@ export class Tools {
     this.updateRay();
     this.hover = this.pick();
     this.updateControl();
+    this.updatePiloting(dt);
+    this.edgeLook(dt);
     this.cooldown -= dt;
     if (this.active === 'weapon' && this.mouseDown && !this.spawnItem && this.weapon.auto) this.tryFire();
     this.updateFlameSound(dt);
@@ -343,6 +378,7 @@ export class Tools {
 
   reset() {
     if (this.grab) this.release();
+    this.stopPiloting();
     for (const p of [...this.pins]) this.removePin(p);
     for (const r of [...this.ropes]) this.removeRope(r);
     for (const m of this.frozenMarks) this.game.scene.remove(m.mesh);
@@ -899,7 +935,15 @@ export class Tools {
 
   // ------------------------------------------------------------------ control a person
   controlClick() {
+    if (this.piloting) {
+      this.piloting.detonate();
+      return;
+    }
     const e = this.hover?.owner?.entity;
+    if (e && e.kind === 'prop' && e.def.pilotable && !e.removed) {
+      this.startPiloting(e);
+      return;
+    }
     if (e && e.kind === 'person' && e !== this.controlled) {
       if (!e.alive) {
         this.emit('toast', `${e.name} can't be controlled right now`);
@@ -960,6 +1004,65 @@ export class Tools {
     p.controlInput.x = x;
     p.controlInput.z = z;
     p.controlInput.run = k.has('ShiftLeft') || k.has('ShiftRight');
+  }
+
+  // ------------------------------------------------------------------ fly a drone
+  startPiloting(d) {
+    this.releaseControl();
+    const cam = this.game.cam;
+    this.piloting = d;
+    this.lookMoved = false;
+    startPilot(d, cam.yaw);
+    cam.moveLock = true;
+    cam.follow = null;
+    cam.rig = (camera, dt) => placePilotCamera(d, camera, dt, groundHeight);
+    this.emit('toast', 'Flying the drone');
+    this.emit('fly', d.pilot.view);
+    this.emit('hint');
+  }
+
+  stopPiloting() {
+    const d = this.piloting;
+    if (!d) return;
+    const view = d.pilot?.view;
+    const yaw = d.pilot?.yaw ?? this.game.cam.yaw;
+    const lost = d.removed;
+    stopPilot(d);
+    this.piloting = null;
+    this.game.cam.moveLock = false;
+    this.game.cam.leaveRig(this.pilotPos, yaw);
+    // flying through its own camera, the picture cuts to static when it goes off
+    this.emit('fly', lost && view === 'fpv' ? 'lost' : null);
+    this.emit('hint');
+  }
+
+  updatePiloting(dt) {
+    const d = this.piloting;
+    if (!d) return;
+    if (d.removed || !d.pilot) {
+      this.stopPiloting();
+      return;
+    }
+    const t = d.body.translation();
+    this.pilotPos.set(t.x, t.y, t.z);
+    const k = this.game.cam.keys;
+    const on = (...codes) => (codes.some((c) => k.has(c)) ? 1 : 0);
+    const p = d.pilot;
+    p.move.set(on('KeyD') - on('KeyA'), on('KeyE', 'Space') - on('KeyQ', 'KeyC'), on('KeyW') - on('KeyS'));
+    p.boost = on('ShiftLeft', 'ShiftRight') === 1;
+    // the arrow keys steer too, for playing without a mouse
+    const turn = on('ArrowRight') - on('ArrowLeft');
+    const tilt = on('ArrowDown') - on('ArrowUp');
+    if (turn || tilt) pilotLook(d, turn * 520 * dt, tilt * 400 * dt);
+  }
+
+  /** Without pointer lock the cursor stops at the window edge, so holding it there keeps turning. */
+  edgeLook(dt) {
+    if (!this.freeLook || !this.lookMoved || this.pointerLocked || this.game.ui?.pointerOverUI) return;
+    const edge = (v) => Math.sign(v) * Math.max(0, (Math.abs(v) - 0.88) / 0.12);
+    const ex = edge(this.pointer.x);
+    const ey = edge(this.pointer.y);
+    if (ex || ey) this.look(ex * 650 * dt, -ey * 450 * dt);
   }
 
   // ------------------------------------------------------------------ rope
